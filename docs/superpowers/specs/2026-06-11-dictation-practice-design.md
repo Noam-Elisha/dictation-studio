@@ -50,7 +50,9 @@ notation (plus Roman numerals for generated harmonic exercises) for self-checkin
 
 ### Playback parameters
 
-- Tempo (BPM), number of playings (1–10), gap between playings (5–120 s) with a visible countdown (skippable).
+- Tempo (40–120 BPM), number of playings (1–10), gap between playings (5–120 s) with a visible countdown (skippable).
+  After the final playing: straight to "finished" (manual reveal); if auto-reveal is on, one final timed gap
+  (writing time) runs first, then the answer appears.
 - **Establish key** before first playing: I–IV–V7–I cadence + tonic note (toggle: off / first playing / every playing).
 - Count-in clicks (one bar, toggle). Honor fermatas (~2× lengthening, toggle).
 - Voices played: all / outer only / bass only / soprano only (scaffolding for harmonic work).
@@ -99,7 +101,7 @@ Space = start/stop, P = extra playing, S = skip gap, R = reveal, N = new exercis
 
 ### SATB voicing (beam search over candidate voicings)
 
-Hard rules (validated independently in tests): voice ranges (B E2–D4? — exact: B E2–C4, T C3–G4, A G3–D5, S C4–G5),
+Hard rules (validated independently in tests): voice ranges (B E2–C4, T C3–G4, A G3–D5, S C4–G5),
 spacing ≤ octave S–A and A–T, no crossing/overlap, no parallel or antiparallel 5ths/8ves/unisons,
 no direct 5th/8ve into outer voices with soprano leaping, leading tone resolves (up to 1̂ in outer voices,
 may fall a 3rd in inner voice at authentic cadence), chordal 7th resolves down by step, never doubled LT or 7th,

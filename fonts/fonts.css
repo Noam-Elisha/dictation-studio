@@ -1,0 +1,33 @@
+/* Vendored from Google Fonts (OFL-licensed families) — see README. */
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fraunces-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fraunces-italic-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('inter-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Music';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('noto-music.woff2') format('woff2');
+}
