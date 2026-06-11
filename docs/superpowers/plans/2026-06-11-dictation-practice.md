@@ -22,11 +22,13 @@
 - **Excerpt model** (consumed by abc.js, synth scheduling, UI):
   `{kind, source, key, num, den, mlen, upbeat, tpq, voices: [[note…]×1|4], romans: [{label, tick}]|null, meta}`
   `upbeat` = ticks in the partial first measure (0 = starts on a downbeat). `meta` carries ids/seed/title/transposition for history & redo.
-- **Voice ranges for generation (MIDI, hard):** S 60–79 (C4–G5), A 53–74 (F3–D5), T 48–67 (C3–G4), B 40–60 (E2–C4).
+- **Voice ranges for generation (MIDI, hard):** S 60–79 (C4–G5), A 55–74 (G3–D5), T 48–67 (C3–G4), B 40–60 (E2–C4).
 - **Generated meters:** harmonic = 4/4 only (half-note rhythm). Melodic = 4/4 or 3/4 (setting), rhythm vocabulary defined per meter.
 - **Bach transposition window:** derived from the excerpt's *actual* per-voice min/max pitches — allowed semitone shift `s ∈ [−6, +6]` with `bassMin+s ≥ 38 (D2)`, `sopMax+s ≤ 81 (A5)`, and resulting key `|fifths| ≤ 6` (choose simpler enharmonic). Shift 0 always allowed.
 - **Final gap:** none after last playing (state → finished, manual reveal); with auto-reveal ON, one final gap (writing time) runs, then reveal.
-- **abc.js melodic output:** single staff, treble clef (no `%%score`), no lyrics line.
+- **abc.js melodic output:** single staff, no `%%score`, no lyrics line; clef chosen by register (bass clef when the line's center sits below C4 — covers Bach-bass-source melodic excerpts).
+- **Establish-key "every playing":** the session timeline re-inserts the cadence before each playing (not just the first).
+- **Acknowledged spec deviations (deliberate):** generated harmonic uses half-note harmonic rhythm with odd chord counts 5/7/9 (spec said per-beat, 4–10) so cadences land on strong beats; chorale-keep target relaxed to ≥ 250; soak coverage = 250 seeds × major/minor per difficulty (= 500/difficulty, matching spec intent).
 - **Difficulty control:** 1–4 for generated sources; when source = Bach, the same control shows 3 buckets (easy/medium/hard).
 - **Tempo bounds:** 40–120 BPM (default 72 harmonic, 80 melodic). **Fixed-key list:** all tonics with |fifths| ≤ 6 for the chosen mode.
 - **Compact chorale note tuple (data file only):** `[step, alter, oct, dur, flags]`, flags bitmask 1=tieStart 2=tieEnd 4=fermata; rest = step −1.
@@ -83,43 +85,43 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task C: Progression + voicing (TDD + soak)
 **Files:** `js/progression.js`, `js/voicing.js`, `tools/test/progression.test.mjs`, `tools/test/voicing.test.mjs`
-- [x] Failing tests — progression: D1 vocab ⊆ {I,I6,IV,V,V7,vi,I64cad}; starts on I/i; ends with chosen cadence formula; D3 minor may include Phrygian HC; secondary dominants only D3+; tone spelling (V in minor has raised 7̂; viio7/V correct); lengths odd 5–9
-- [x] Failing tests — voicing: `validate` catches planted parallel 5ths/8ves, range, spacing, overlap, unresolved LT/7th, doubled LT; `harmonize` on fixed I-IV-V7-I returns valid complete voicing
-- [x] Soak: 4 difficulties × major/minor × 150 seeds → `harmonize` success ≥ 99% (internal retry allowed), `validate` returns zero violations for every success
-- [x] Implement; green; commit `feat: progression grammar + SATB voice-leading engine`
+- [ ] Failing tests — progression: D1 vocab ⊆ {I,I6,IV,V,V7,vi,I64cad}; starts on I/i; ends with chosen cadence formula; D3 minor may include Phrygian HC; secondary dominants only D3+; tone spelling (V in minor has raised 7̂; viio7/V correct); lengths odd 5–9
+- [ ] Failing tests — voicing: `validate` catches planted parallel 5ths/8ves, range, spacing, overlap, unresolved LT/7th, doubled LT; `harmonize` on fixed I-IV-V7-I returns valid complete voicing
+- [ ] Soak: 4 difficulties × major/minor × 150 seeds → `harmonize` success ≥ 99% (internal retry allowed), `validate` returns zero violations for every success
+- [ ] Implement; green; commit `feat: progression grammar + SATB voice-leading engine`
 
 ### Task D: Melody generator (TDD + soak)
 **Files:** `js/melody.js`, `tools/test/melody.test.mjs`
-- [x] Failing tests: total duration = bars·mlen (+pickup handling); range ≤ 10th & within C4–G5; no aug 2nds; leaps ≤ P5 (D1–2) with compensation; ends 2̂→1̂ or 7̂→1̂ on long final; minor: ascending 6̂/7̂ raised toward tonic, descending natural; rhythm values from difficulty vocab; soak 4×2×150 seeds
-- [x] Implement; green; commit `feat: melodic dictation generator`
+- [ ] Failing tests: total duration = bars·mlen (+pickup handling); range ≤ 10th & within C4–G5; no aug 2nds; leaps ≤ P5 (D1–2) with compensation; ends 2̂→1̂ or 7̂→1̂ on long final; minor: ascending 6̂/7̂ raised toward tonic, descending natural; rhythm values from difficulty vocab; soak 4×2×150 seeds
+- [ ] Implement; green; commit `feat: melodic dictation generator`
 
 ### Task E: Excerpt + ABC (TDD)
 **Files:** `js/excerpt.js`, `js/abc.js`, `tools/test/excerpt.test.mjs`, `tools/test/abc.test.mjs`
-- [x] Failing tests — excerpt: Bach phrase slice has aligned voice durations & correct `upbeat`; transposition window respects ranges & |fifths| ≤ 6; respelled key correct; generated harmonic assembly: chords→notes, romans ticks correct, meter fill exact; melodic assembly
-- [x] Failing tests — abc: golden header (`%%score {(S A) | (T B)}`, clefs, `K:`, `M:`, `L:1/32`); accidental logic (F# in G major emitted bare; F natural emits `=F`; accidental persists in measure → second F# after natural re-emits `^F`; octave-specific); ties `-`, fermata `!fermata!`, beat-grouped beaming spaces, bar `|` placement incl. upbeat, RN `w:` line count matches bass notes (skip-syllable `*` for held bass)
-- [x] Implement both; green; commit `feat: excerpt assembly + ABC engraving conversion`
+- [ ] Failing tests — excerpt: Bach phrase slice has aligned voice durations & correct `upbeat`; transposition window respects ranges & |fifths| ≤ 6; respelled key correct; generated harmonic assembly: chords→notes, romans ticks correct, meter fill exact; melodic assembly
+- [ ] Failing tests — abc: golden header (`%%score {(S A) | (T B)}`, clefs, `K:`, `M:`, `L:1/32`); accidental logic (F# in G major emitted bare; F natural emits `=F`; accidental persists in measure → second F# after natural re-emits `^F`; octave-specific); ties `-`, fermata `!fermata!`, beat-grouped beaming spaces, bar `|` placement incl. upbeat, RN `w:` line count matches bass notes (skip-syllable `*` for held bass)
+- [ ] Implement both; green; commit `feat: excerpt assembly + ABC engraving conversion`
 
 ### Task F: Synth + session + storage
 **Files:** `js/synth.js`, `js/session.js`, `js/storage.js` (+ `tools/test/session.test.mjs` for plan-building math)
-- [x] Synth: lazy ctx; `Player` with 25 ms lookahead loop & 120 ms horizon, `stop()` cancels cleanly (no stuck tones — track live nodes, fast release on master); piano voice (triangle + 2f sine partial, exp decay, lowpass, velocity); woodblock-ish click; per-voice `GainNode[4]` + master soft compressor; `buildCadence(key)` via voicing on I-IV-V7-I + tonic octave
-- [x] Session: timeline builder — events from excerpt at tempo (fermata ×2 toggle), schedules: establish? → count-in? → N plays with gap countdowns (200 ms UI tick, skippable, extra-play inserts another play, stop→idle); auto-reveal toggle; emits `state`, `tick`, `playProgress`
-- [x] Tested in Node: pure helpers (`excerptToEvents` timing incl. fermata stretch & per-voice selection, gap schedule math)
-- [x] Commit `feat: audio engine + practice session state machine + storage`
+- [ ] Synth: lazy ctx; `Player` with 25 ms lookahead loop & 120 ms horizon, `stop()` cancels cleanly (no stuck tones — track live nodes, fast release on master); piano voice (triangle + 2f sine partial, exp decay, lowpass, velocity); woodblock-ish click; per-voice `GainNode[4]` + master soft compressor; `buildCadence(key)` via voicing on I-IV-V7-I + tonic octave
+- [ ] Session: timeline builder — events from excerpt at tempo (fermata ×2 toggle), schedules: establish? → count-in? → N plays with gap countdowns (200 ms UI tick, skippable, extra-play inserts another play, stop→idle); auto-reveal toggle; emits `state`, `tick`, `playProgress`
+- [ ] Tested in Node: pure helpers (`excerptToEvents` timing incl. fermata stretch & per-voice selection, gap schedule math)
+- [ ] Commit `feat: audio engine + practice session state machine + storage`
 
 ### Task G: UI (frontend-design skill) + boot
 **Files:** `index.html`, `css/style.css`, `js/ui.js`, `js/main.js`
-- [x] Invoke superpowers/frontend-design for visual direction ("engraver's desk": warm paper, ink, oxblood accent, Fraunces display + Inter UI + Noto Music accents, hairline staff-rule motifs)
-- [x] Settings rail (mode/source/difficulty/key/length/transpose; tempo/plays/gap/establish/count-in/fermata/voices-played/per-voice levels (advanced); first-note toggle; auto-reveal); presets row (built-ins + save/delete)
-- [x] Stage: givens chips; state hero (idle → establishing → count-in → "Playing k of N" w/ progress bar → countdown ring → finished); transport (Start/Stop, Play again, Skip wait, Reveal)
-- [x] Reveal: abcjs render (responsive width), RN under bass via lyrics, replay + per-voice mute/solo, transposition note ("originally in X"), self-grade trio → stats; New / Redo
-- [x] History list (mode, source, key, grade, date, redo) + stats line; About/licenses modal; shortcuts (Space/P/S/R/N) + help; `aria-live` status; reduced-motion
-- [x] Commit `feat: full UI`
+- [ ] Invoke superpowers/frontend-design for visual direction ("engraver's desk": warm paper, ink, oxblood accent, Fraunces display + Inter UI + Noto Music accents, hairline staff-rule motifs)
+- [ ] Settings rail (mode/source/difficulty/key/length/transpose; tempo/plays/gap/establish/count-in/fermata/voices-played/per-voice levels (advanced); first-note toggle; auto-reveal); presets row (built-ins + save/delete)
+- [ ] Stage: givens chips; state hero (idle → establishing → count-in → "Playing k of N" w/ progress bar → countdown ring → finished); transport (Start/Stop, Play again, Skip wait, Reveal)
+- [ ] Reveal: abcjs render (responsive width), RN under bass via lyrics, replay + per-voice mute/solo, transposition note ("originally in X"), self-grade trio → stats; New / Redo
+- [ ] History list (mode, source, key, grade, date, redo) + stats line; About/licenses modal; shortcuts (Space/P/S/R/N) + help; `aria-live` status; reduced-motion
+- [ ] Commit `feat: full UI`
 
 ### Task H: Browser verification + design iteration
-- [x] Playwright over `file://…/index.html`: console clean on load; run melodic+harmonic flows (2 plays, short gap) → reveal shows SVG; redo reproduces identical ABC; history persists after reload; mobile 390px layout sane
-- [x] Screenshots desktop/mobile → iterate design per frontend-design eye (spacing, hierarchy, states) until professional
-- [x] Commit fixes
+- [ ] Playwright over `file://…/index.html`: console clean on load; run melodic+harmonic flows (2 plays, short gap) → reveal shows SVG; redo reproduces identical ABC; history persists after reload; mobile 390px layout sane
+- [ ] Screenshots desktop/mobile → iterate design per frontend-design eye (spacing, hierarchy, states) until professional
+- [ ] Commit fixes
 
 ### Task I: README + finish
-- [x] README: what/why, quick start (double-click `index.html` or any static host), feature tour, practice-method notes, regenerating data, licenses/attribution (abcjs MIT; Bach encodings craigsapp/bach-370-chorales; fonts OFL)
-- [x] `.gitignore` (`tools/cache/`), superpowers:verification-before-completion (full test run + browser pass), final commit
+- [ ] README: what/why, quick start (double-click `index.html` or any static host), feature tour, practice-method notes, regenerating data, licenses/attribution (abcjs MIT; Bach encodings craigsapp/bach-370-chorales; fonts OFL)
+- [ ] `.gitignore` (`tools/cache/`), superpowers:verification-before-completion (full test run + browser pass), final commit
