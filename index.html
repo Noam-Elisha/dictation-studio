@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dictation Studio — melodic &amp; harmonic dictation practice</title>
+<meta name="description" content="Practice melodic and harmonic dictation with real Bach chorales and rule-generated four-part writing. Exam-style timed playings, hidden answers, engraved notation.">
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%237a2e2b'/%3E%3Ctext x='32' y='44' font-size='36' text-anchor='middle' fill='%23f6f1e7' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="wordmark">
+      <span class="wordmark-clef" aria-hidden="true">𝄢</span>
+      <h1>Dictation <em>Studio</em></h1>
+    </div>
+    <div class="masthead-side">
+      <span id="stats-chip" class="stats-chip" title="graded exercises (got it · close · missed)"></span>
+      <button class="btn-text" id="btn-about" type="button">About</button>
+    </div>
+  </div>
+  <div class="staff-rule" aria-hidden="true"></div>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<main class="layout">
+  <!-- ======================= settings rail ======================= -->
+  <aside class="rail" aria-label="Exercise settings">
+    <section class="card rail-card anim-1">
+      <h2 class="card-title">Exercise</h2>
+
+      <div class="field">
+        <span class="field-label">Mode</span>
+        <div class="seg" role="radiogroup" aria-label="Dictation mode">
+          <label><input type="radio" name="mode" value="melodic"><span>Melodic</span></label>
+          <label><input type="radio" name="mode" value="harmonic"><span>Harmonic</span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Source</span>
+        <div class="seg" role="radiogroup" aria-label="Source">
+          <label><input type="radio" name="source" value="bach"><span>Bach chorale</span></label>
+          <label><input type="radio" name="source" value="generated"><span>Generated</span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Difficulty</span>
+        <div class="seg seg-4" id="difficulty-seg" role="radiogroup" aria-label="Difficulty"></div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Key</span>
+        <div class="key-row">
+          <select id="sel-keymode" aria-label="Key selection">
+            <option value="any">Random — any</option>
+            <option value="major">Random major</option>
+            <option value="minor">Random minor</option>
+            <option value="fixed">Fixed key…</option>
+          </select>
+          <select id="sel-fixedkey" aria-label="Fixed key" hidden></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Length</span>
+        <div class="seg" role="radiogroup" aria-label="Length">
+          <label><input type="radio" name="length" value="short"><span id="len-short">Short</span></label>
+          <label><input type="radio" name="length" value="medium"><span id="len-medium">Medium</span></label>
+          <label><input type="radio" name="length" value="long"><span id="len-long">Long</span></label>
+        </div>
+      </div>
+
+      <div class="field" id="row-melodicvoice">
+        <span class="field-label">Line</span>
+        <div class="seg" role="radiogroup" aria-label="Which chorale line">
+          <label><input type="radio" name="melodicVoice" value="soprano"><span>Soprano</span></label>
+          <label><input type="radio" name="melodicVoice" value="bass"><span>Bass</span></label>
+        </div>
+      </div>
+
+      <div class="field" id="row-meter">
+        <span class="field-label">Meter</span>
+        <div class="seg" role="radiogroup" aria-label="Meter">
+          <label><input type="radio" name="meter" value="any"><span>Any</span></label>
+          <label><input type="radio" name="meter" value="4/4"><span>4/4</span></label>
+          <label><input type="radio" name="meter" value="3/4"><span>3/4</span></label>
+        </div>
+      </div>
+
+      <label class="check" id="row-transpose">
+        <input type="checkbox" id="chk-transpose">
+        <span>Random transposition <small>defeats memorising the corpus</small></span>
+      </label>
+
+      <label class="check" id="row-pickup">
+        <input type="checkbox" id="chk-pickup">
+        <span>Allow upbeat <small>melody may start before the bar</small></span>
+      </label>
+    </section>
+
+    <section class="card rail-card anim-2">
+      <h2 class="card-title">Playback</h2>
+
+      <div class="field field-inline">
+        <label class="field-label" for="rng-bpm">Tempo</label>
+        <div class="slider-row">
+          <input type="range" id="rng-bpm" min="40" max="120" step="2">
+          <output id="out-bpm" class="slider-out"></output>
+        </div>
+      </div>
+
+      <div class="field field-inline">
+        <span class="field-label">Playings</span>
+        <div class="stepper" data-for="plays">
+          <button type="button" class="step-dec" aria-label="fewer playings">−</button>
+          <output id="out-plays"></output>
+          <button type="button" class="step-inc" aria-label="more playings">+</button>
+        </div>
+      </div>
+
+      <div class="field field-inline">
+        <label class="field-label" for="rng-gap">Silence between</label>
+        <div class="slider-row">
+          <input type="range" id="rng-gap" min="5" max="120" step="5">
+          <output id="out-gap" class="slider-out"></output>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Establish key</span>
+        <div class="seg" role="radiogroup" aria-label="Establish key">
+          <label><input type="radio" name="establish" value="off"><span>Off</span></label>
+          <label><input type="radio" name="establish" value="first"><span>Once</span></label>
+          <label><input type="radio" name="establish" value="every"><span>Every</span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Count-in</span>
+        <div class="seg" role="radiogroup" aria-label="Count-in">
+          <label><input type="radio" name="countIn" value="off"><span>Off</span></label>
+          <label><input type="radio" name="countIn" value="first"><span>First</span></label>
+          <label><input type="radio" name="countIn" value="every"><span>Every</span></label>
+        </div>
+      </div>
+
+      <div class="field" id="row-voicesplayed">
+        <span class="field-label">Voices played</span>
+        <div class="seg seg-4" role="radiogroup" aria-label="Voices played">
+          <label><input type="radio" name="voicesPlayed" value="all"><span>All</span></label>
+          <label><input type="radio" name="voicesPlayed" value="outer"><span>Outer</span></label>
+          <label><input type="radio" name="voicesPlayed" value="soprano"><span>Sop.</span></label>
+          <label><input type="radio" name="voicesPlayed" value="bass"><span>Bass</span></label>
+        </div>
+      </div>
+
+      <label class="check" id="row-fermatas">
+        <input type="checkbox" id="chk-fermatas">
+        <span>Honour fermatas <small>phrase ends are held, chorale style</small></span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" id="chk-autoreveal">
+        <span>Auto-reveal <small>after the last silence, show the answer</small></span>
+      </label>
+    </section>
+
+    <section class="card rail-card anim-3">
+      <h2 class="card-title">Presets</h2>
+      <div class="preset-row">
+        <select id="sel-preset" aria-label="Preset"></select>
+        <button class="btn-small" id="btn-apply-preset" type="button">Apply</button>
+      </div>
+      <div class="preset-row">
+        <input type="text" id="inp-preset-name" placeholder="Save current as…" aria-label="New preset name">
+        <button class="btn-small" id="btn-save-preset" type="button">Save</button>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ======================= stage ======================= -->
+  <section class="stage-col">
+    <section class="card stage anim-1" aria-live="polite">
+      <div class="givens" id="givens"></div>
+
+      <div class="hero" id="hero">
+        <!-- filled by ui.js per state -->
+      </div>
+
+      <div class="transport" id="transport"></div>
+    </section>
+
+    <section class="card answer anim-2" id="answer-card">
+      <div class="answer-head">
+        <h2 class="card-title">Answer</h2>
+        <div class="answer-meta" id="answer-meta"></div>
+      </div>
+      <div id="answer-hidden" class="answer-hidden">
+        <div class="ghost-staff" aria-hidden="true">
+          <div class="ghost-lines"></div>
+          <div class="ghost-lines"></div>
+        </div>
+        <p class="answer-note"><span class="noto" aria-hidden="true">𝄐</span> The answer stays hidden while you work. Write it down, then reveal.</p>
+      </div>
+      <div id="answer-body" hidden>
+        <div id="notation"></div>
+        <div class="study" id="study-controls"></div>
+        <div class="grade" id="grade-row"></div>
+      </div>
+    </section>
+
+    <section class="card history anim-3">
+      <div class="history-head">
+        <h2 class="card-title">Practice log</h2>
+        <button class="btn-text" id="btn-clear-history" type="button">Clear</button>
+      </div>
+      <ol id="history-list" class="history-list"></ol>
+      <p class="history-empty" id="history-empty">Nothing yet — your graded exercises will appear here.</p>
+    </section>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="staff-rule" aria-hidden="true"></div>
+  <div class="footer-inner">
+    <div class="kbd-legend">
+      <span><kbd>Space</kbd> start / stop</span>
+      <span><kbd>P</kbd> play again</span>
+      <span><kbd>S</kbd> skip wait</span>
+      <span><kbd>R</kbd> reveal</span>
+      <span><kbd>N</kbd> new</span>
+    </div>
+    <p class="colophon">Chorale data: <a href="https://github.com/craigsapp/bach-370-chorales" target="_blank" rel="noopener">craigsapp/bach-370-chorales</a> (CC BY-NC-SA 4.0) · engraving by <a href="https://www.abcjs.net" target="_blank" rel="noopener">abcjs</a> · works offline</p>
+  </div>
+</footer>
+
+<dialog id="dlg-about">
+  <h2>Dictation <em>Studio</em></h2>
+  <p>A practice room for melodic and harmonic dictation. Excerpts come from the 366 usable Bach
+  chorales of the Breitkopf 371 (encoded by Craig Sapp) or from a rule-based four-part writing
+  generator that obeys common-practice voice leading.</p>
+  <h3>How to practice</h3>
+  <ol>
+    <li>Choose mode, source and playback pacing. The key and meter are always given, as in an exam.</li>
+    <li>Press <strong>Start</strong>. The key is established, then the excerpt plays the set number of times with silent writing gaps.</li>
+    <li>Write what you hear. <strong>Reveal</strong> shows the engraved answer (with Roman numerals for generated harmonic exercises).</li>
+    <li>Grade yourself honestly — the log tracks your progress.</li>
+  </ol>
+  <h3>Licences</h3>
+  <p>Chorale encodings © Craig Stuart Sapp, CC BY-NC-SA 4.0 · abcjs (MIT) · Fraunces, Inter &amp; Noto Music (SIL OFL).</p>
+  <form method="dialog"><button class="btn primary">Close</button></form>
+</dialog>
+
+<script src="js/vendor/abcjs-basic-min.js"></script>
+<script src="js/data/chorales-data.js"></script>
+<script src="js/rng.js"></script>
+<script src="js/theory.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/voicing.js"></script>
+<script src="js/melody.js"></script>
+<script src="js/excerpt.js"></script>
+<script src="js/abc.js"></script>
+<script src="js/synth.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/session.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
