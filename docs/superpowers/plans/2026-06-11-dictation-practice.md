@@ -85,10 +85,10 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task C: Progression + voicing (TDD + soak)
 **Files:** `js/progression.js`, `js/voicing.js`, `tools/test/progression.test.mjs`, `tools/test/voicing.test.mjs`
-- [ ] Failing tests — progression: D1 vocab ⊆ {I,I6,IV,V,V7,vi,I64cad}; starts on I/i; ends with chosen cadence formula; D3 minor may include Phrygian HC; secondary dominants only D3+; tone spelling (V in minor has raised 7̂; viio7/V correct); lengths odd 5–9
-- [ ] Failing tests — voicing: `validate` catches planted parallel 5ths/8ves, range, spacing, overlap, unresolved LT/7th, doubled LT; `harmonize` on fixed I-IV-V7-I returns valid complete voicing
-- [ ] Soak: 4 difficulties × major/minor × 150 seeds → `harmonize` success ≥ 99% (internal retry allowed), `validate` returns zero violations for every success
-- [ ] Implement; green; commit `feat: progression grammar + SATB voice-leading engine`
+- [x] Failing tests — progression: D1 vocab ⊆ {I,I6,IV,V,V7,vi,I64cad}; starts on I/i; ends with chosen cadence formula; D3 minor may include Phrygian HC; secondary dominants only D3+; tone spelling (V in minor has raised 7̂; viio7/V correct); lengths odd 5–9
+- [x] Failing tests — voicing: `validate` catches planted parallel 5ths/8ves, range, spacing, overlap, unresolved LT/7th, doubled LT; `harmonize` on fixed I-IV-V7-I returns valid complete voicing
+- [x] Soak: 4 difficulties × major/minor × 150 seeds → `harmonize` success ≥ 99% (internal retry allowed), `validate` returns zero violations for every success
+- [x] Implement; green; commit `feat: progression grammar + SATB voice-leading engine`
 
 ### Task D: Melody generator (TDD + soak)
 **Files:** `js/melody.js`, `tools/test/melody.test.mjs`
