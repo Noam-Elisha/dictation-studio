@@ -113,7 +113,13 @@
         }
       }
       if (!pool.length) return null;
-      const pick = DS.rng.pick(rng, pool);
+      // Down-weight excerpts that open at the very start of a chorale and
+      // gently favor deeper starts, so a multi-phrase excerpt isn't usually
+      // the chorale's opening — the corpus has plenty of interior phrases.
+      const pick = DS.rng.weighted(
+        rng,
+        pool.map((e) => [e, Math.min(2.2, 0.5 + 0.2 * e.w.idx)])
+      );
       ch = pick.c;
       span = pick.w;
     }
@@ -207,15 +213,10 @@
       }
       if (!voicesByChord) return null;
 
-      const voices = [0, 1, 2, 3].map((vi) =>
-        chords.map((c, i) => ({
-          ...voicesByChord[i][vi],
-          dur: c.dur,
-          tieStart: false,
-          tieEnd: false,
-          fermata: false,
-        }))
-      );
+      const voices = DS.nct.assemble(rng, key, chords, voicesByChord, {
+        difficulty: settings.difficulty || 1,
+        embellish: settings.embellish,
+      });
       const romans = [];
       let tick = 0;
       for (const c of chords) {

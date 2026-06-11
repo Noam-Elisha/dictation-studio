@@ -124,7 +124,10 @@
     radioSet('meter', settings.meter);
     radioSet('establish', settings.establish);
     radioSet('countIn', settings.countIn);
-    radioSet('voicesPlayed', settings.voicesPlayed);
+    radioSet('timbre', settings.timbre);
+    $$('input[name="voicesPlayed"]').forEach((el) => {
+      el.checked = settings.voicesPlayed.includes(Number(el.value));
+    });
     $('#sel-keymode').value = settings.keyMode;
     $('#sel-fixedkey').value = settings.fixedKey;
     $('#chk-transpose').checked = settings.transpose;
@@ -146,7 +149,7 @@
   }
 
   function wireSettings() {
-    for (const name of ['mode', 'source', 'length', 'melodicVoice', 'meter', 'establish', 'countIn', 'voicesPlayed']) {
+    for (const name of ['mode', 'source', 'length', 'melodicVoice', 'meter', 'establish', 'countIn']) {
       $$(`input[name="${name}"]`).forEach((el) =>
         el.addEventListener('change', () => {
           settings[name] = radioGet(name);
@@ -155,6 +158,24 @@
         })
       );
     }
+    $$('input[name="voicesPlayed"]').forEach((el) =>
+      el.addEventListener('change', () => {
+        const sel = $$('input[name="voicesPlayed"]:checked').map((c) => Number(c.value));
+        if (!sel.length) {
+          el.checked = true; // never allow zero voices
+          return;
+        }
+        settings.voicesPlayed = sel.sort((a, b) => a - b);
+        persist();
+      })
+    );
+    $$('input[name="timbre"]').forEach((el) =>
+      el.addEventListener('change', () => {
+        settings.timbre = radioGet('timbre');
+        if (DS.synth.setTimbre) DS.synth.setTimbre(settings.timbre);
+        persist();
+      })
+    );
     $('#sel-keymode').addEventListener('change', (e) => { settings.keyMode = e.target.value; persist(); });
     $('#sel-fixedkey').addEventListener('change', (e) => { settings.fixedKey = e.target.value; persist(); });
     $('#chk-transpose').addEventListener('change', (e) => { settings.transpose = e.target.checked; persist(); });
@@ -199,6 +220,7 @@
       const preset = DS.storage.listPresets().find((p) => p.name === name);
       if (!preset) return;
       Object.assign(settings, preset.settings);
+      DS.storage.normalizeSettings(settings);
       settingsToUI();
       persist();
       banner(`Preset “${name}” applied.`, false);
@@ -650,6 +672,7 @@
     init() {
       settings = DS.storage.loadSettings();
       session = DS.session.create();
+      if (DS.synth.setTimbre) DS.synth.setTimbre(settings.timbre);
 
       buildFixedKeyOptions();
       settingsToUI();

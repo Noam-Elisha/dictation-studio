@@ -121,6 +121,54 @@
   let masterGain = null;
   let voiceGains = null;
 
+  // Instrument: 'piano' (sampled, default) or 'synth' (oscillator voice).
+  let timbre = 'piano';
+  let pianoBank = null; // sorted [{midi, buffer}]
+  let pianoReady = null; // Promise resolved once samples are decoded
+
+  function setTimbre(name) {
+    timbre = name === 'synth' ? 'synth' : 'piano';
+  }
+
+  function b64ToBytes(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // Decode the embedded base64 piano samples once; resolves to nothing, fills
+  // pianoBank. Falls back to an empty bank (-> synth voice) if data is absent.
+  function ensurePiano() {
+    if (pianoReady) return pianoReady;
+    ensureContext();
+    const data = window.DS_PIANO;
+    if (!data || !data.samples) {
+      pianoBank = [];
+      pianoReady = Promise.resolve();
+      return pianoReady;
+    }
+    pianoReady = Promise.all(
+      Object.entries(data.samples).map(
+        ([midi, b64]) =>
+          new Promise((resolve) => {
+            try {
+              ctx.decodeAudioData(
+                b64ToBytes(b64).buffer.slice(0),
+                (buffer) => resolve({ midi: Number(midi), buffer }),
+                () => resolve(null)
+              );
+            } catch (e) {
+              resolve(null);
+            }
+          })
+      )
+    ).then((arr) => {
+      pianoBank = arr.filter(Boolean).sort((a, b) => a.midi - b.midi);
+    });
+    return pianoReady;
+  }
+
   function ensureContext() {
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -149,7 +197,29 @@
     voiceGains[voice].gain.value = level;
   }
 
-  function pianoNote(dest, midi, t, dur, vel) {
+  // Sampled piano: nearest anchor, pitch-shifted, with a damper-like release.
+  function pianoVoice(dest, midi, t, dur, vel, sources) {
+    if (!pianoBank || !pianoBank.length) return synthVoice(dest, midi, t, dur, vel);
+    let best = pianoBank[0];
+    for (const s of pianoBank)
+      if (Math.abs(s.midi - midi) < Math.abs(best.midi - midi)) best = s;
+    const src = ctx.createBufferSource();
+    src.buffer = best.buffer;
+    src.playbackRate.value = Math.pow(2, (midi - best.midi) / 12);
+    const g = ctx.createGain();
+    const peak = vel * 0.6;
+    g.gain.setValueAtTime(peak, t); // sample carries its own attack
+    const tEnd = t + Math.max(0.12, dur);
+    g.gain.setTargetAtTime(0.0001, tEnd, 0.14); // damper
+    src.connect(g);
+    g.connect(dest);
+    src.start(t);
+    src.stop(tEnd + 0.7);
+    if (sources) sources.push(src);
+    return tEnd + 0.7;
+  }
+
+  function synthVoice(dest, midi, t, dur, vel) {
     const f = 440 * Math.pow(2, (midi - 69) / 12);
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
@@ -235,27 +305,37 @@
       const plain = ctx.createGain();
       plain.connect(masterGain);
       const kill = [plain, ...perVoice];
+      const liveSources = [];
 
-      const t0 = ctx.currentTime + 0.12;
       let idx = 0;
+      let t0 = 0;
       const HORIZON = 0.2;
-      timer = setInterval(() => {
+      function begin() {
         if (stopped) return;
-        const now = ctx.currentTime;
-        while (idx < events.length && t0 + events[idx].t < now + HORIZON) {
-          const ev = events[idx++];
-          if (ev.click) clickSound(plain, t0 + ev.t, ev.accent);
-          else {
-            const dest = ev.voice == null ? plain : perVoice[ev.voice];
-            pianoNote(dest, ev.midi, t0 + ev.t, ev.dur, ev.vel);
+        t0 = ctx.currentTime + 0.12;
+        timer = setInterval(() => {
+          if (stopped) return;
+          const now = ctx.currentTime;
+          while (idx < events.length && t0 + events[idx].t < now + HORIZON) {
+            const ev = events[idx++];
+            if (ev.click) clickSound(plain, t0 + ev.t, ev.accent);
+            else {
+              const dest = ev.voice == null ? plain : perVoice[ev.voice];
+              if (timbre === 'piano') pianoVoice(dest, ev.midi, t0 + ev.t, ev.dur, ev.vel, liveSources);
+              else synthVoice(dest, ev.midi, t0 + ev.t, ev.dur, ev.vel);
+            }
           }
-        }
-        if (now > t0 + totalSec + 0.25) {
-          clearInterval(timer);
-          timer = null;
-          if (!stopped && onDone) onDone();
-        }
-      }, 25);
+          if (now > t0 + totalSec + 0.25) {
+            clearInterval(timer);
+            timer = null;
+            if (!stopped && onDone) onDone();
+          }
+        }, 25);
+      }
+
+      // Piano needs its samples decoded first (one-time, ~tens of ms).
+      if (timbre === 'piano') ensurePiano().then(begin);
+      else begin();
 
       return {
         stop() {
@@ -265,6 +345,11 @@
             timer = null;
           }
           const now = ctx.currentTime;
+          for (const s of liveSources) {
+            try {
+              s.stop(now + 0.06);
+            } catch (e) { /* not started or already stopped */ }
+          }
           for (const g of kill) {
             try {
               g.gain.setTargetAtTime(0.0001, now, 0.03);
@@ -284,6 +369,8 @@
     buildCountInEvents,
     ensureContext,
     setVoiceLevel,
+    setTimbre,
+    ensurePiano,
     createPlayer,
   };
 })();

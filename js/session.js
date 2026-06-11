@@ -134,12 +134,8 @@
 
     function voicesPlayedFor(ex, s) {
       if (ex.voices.length === 1) return [0];
-      switch (s.voicesPlayed) {
-        case 'outer': return [0, 3];
-        case 'soprano': return [0];
-        case 'bass': return [3];
-        default: return [0, 1, 2, 3];
-      }
+      const vp = Array.isArray(s.voicesPlayed) ? s.voicesPlayed.filter((i) => i >= 0 && i < 4) : null;
+      return vp && vp.length ? vp : [0, 1, 2, 3];
     }
 
     session.start = function (excerpt, settings) {

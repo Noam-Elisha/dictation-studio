@@ -108,6 +108,14 @@
     <section class="card rail-card anim-2">
       <h2 class="card-title">Playback</h2>
 
+      <div class="field">
+        <span class="field-label">Sound</span>
+        <div class="seg" role="radiogroup" aria-label="Instrument sound">
+          <label><input type="radio" name="timbre" value="piano"><span>Piano</span></label>
+          <label><input type="radio" name="timbre" value="synth"><span>Synth</span></label>
+        </div>
+      </div>
+
       <div class="field field-inline">
         <label class="field-label" for="rng-bpm">Tempo</label>
         <div class="slider-row">
@@ -153,11 +161,11 @@
 
       <div class="field" id="row-voicesplayed">
         <span class="field-label">Voices played</span>
-        <div class="seg seg-4" role="radiogroup" aria-label="Voices played">
-          <label><input type="radio" name="voicesPlayed" value="all"><span>All</span></label>
-          <label><input type="radio" name="voicesPlayed" value="outer"><span>Outer</span></label>
-          <label><input type="radio" name="voicesPlayed" value="soprano"><span>Sop.</span></label>
-          <label><input type="radio" name="voicesPlayed" value="bass"><span>Bass</span></label>
+        <div class="seg seg-4 seg-multi" role="group" aria-label="Voices played">
+          <label><input type="checkbox" name="voicesPlayed" value="0"><span>Sop.</span></label>
+          <label><input type="checkbox" name="voicesPlayed" value="1"><span>Alto</span></label>
+          <label><input type="checkbox" name="voicesPlayed" value="2"><span>Ten.</span></label>
+          <label><input type="checkbox" name="voicesPlayed" value="3"><span>Bass</span></label>
         </div>
       </div>
 
@@ -260,10 +268,12 @@
 
 <script src="js/vendor/abcjs-basic-min.js"></script>
 <script src="js/data/chorales-data.js"></script>
+<script src="js/data/piano-samples.js"></script>
 <script src="js/rng.js"></script>
 <script src="js/theory.js"></script>
 <script src="js/progression.js"></script>
 <script src="js/voicing.js"></script>
+<script src="js/nct.js"></script>
 <script src="js/melody.js"></script>
 <script src="js/excerpt.js"></script>
 <script src="js/abc.js"></script>

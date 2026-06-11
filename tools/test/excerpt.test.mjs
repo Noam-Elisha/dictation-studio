@@ -6,6 +6,7 @@ const DS = loadDS([
   'js/theory.js',
   'js/progression.js',
   'js/voicing.js',
+  'js/nct.js',
   'js/melody.js',
   'js/excerpt.js',
 ]);
@@ -77,7 +78,9 @@ suite('excerpt: bach', () => {
         lo = Math.min(lo, m);
         hi = Math.max(hi, m);
       }
-      ok(lo >= 38 && hi <= 81, `seed ${seed}: range ${lo}-${hi}`);
+      // untransposed originals can reach the corpus floor (C2=36); transposed
+      // excerpts stay within [38,81]. Either way nothing should exceed [36,81].
+      ok(lo >= 36 && hi <= 81, `seed ${seed}: range ${lo}-${hi}`);
       const totals = ex.voices.map((v) => v.reduce((s, n) => s + n.dur, 0));
       ok(totals.every((t) => t === totals[0]), `seed ${seed}: aligned voices`);
       ok(ex.upbeat >= 0 && ex.upbeat < ex.mlen, `seed ${seed}: upbeat ${ex.upbeat}`);

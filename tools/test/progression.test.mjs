@@ -109,6 +109,20 @@ suite('progression: grammar', () => {
     }
   });
 
+  test('augmented sixths spelled per mode, cadence-only at D4', () => {
+    eq(P.chordSpec('It6', 'major').tones, [[6, -1], [1, 0], [4, 1]]); // Ab C F# in C
+    eq(P.chordSpec('Fr43', 'major').tones, [[6, -1], [1, 0], [2, 0], [4, 1]]);
+    eq(P.chordSpec('It6', 'minor').tones, [[6, 0], [1, 0], [4, 1]]); // natural ♭6 in minor
+    eq(P.chordSpec('Fr43', 'minor').tones, [[6, 0], [1, 0], [2, 0], [4, 1]]);
+    eq(P.chordSpec('It6', 'major').lt, 2);
+    eq(P.chordSpec('Fr43', 'major').lt, 3);
+    for (let seed = 0; seed < 150; seed++) {
+      for (const mode of ['major', 'minor'])
+        for (const c of P.generate(DS.rng.create(seed * 4), { difficulty: 3, mode, length: 7 }))
+          ok(!['It6', 'Fr43', 'Ger65', 'N6'].includes(c.sym), `${c.sym} must not appear below D4`);
+    }
+  });
+
   test('cadential 64 always resolves to V-family then tonic-or-end', () => {
     for (let seed = 0; seed < 200; seed++) {
       const rng = DS.rng.create(seed);

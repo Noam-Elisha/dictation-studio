@@ -44,18 +44,30 @@
     melodicVoice: 'soprano', // soprano | bass (bach melodic)
     transpose: true, // bach: random transposition
     pickup: false, // generated melodic upbeat
-    bpm: 72,
+    bpm: 60,
     plays: 3,
     gapSec: 30,
     establish: 'first', // off | first | every
     countIn: 'off', // off | first | every
     honorFermatas: true,
-    voicesPlayed: 'all', // all | outer | soprano | bass
+    voicesPlayed: [0, 1, 2, 3], // indices into S,A,T,B
+    timbre: 'piano', // piano (sampled) | synth
     autoReveal: false,
     showFirstNote: false,
     showRomans: true,
     voiceLevels: [1, 0.85, 0.85, 1],
   };
+
+  // Old builds stored voicesPlayed as a string; normalize to an index array.
+  const VOICES_FROM_STRING = { all: [0, 1, 2, 3], outer: [0, 3], soprano: [0], bass: [3] };
+  function normalizeSettings(s) {
+    if (typeof s.voicesPlayed === 'string') s.voicesPlayed = VOICES_FROM_STRING[s.voicesPlayed] || [0, 1, 2, 3];
+    if (!Array.isArray(s.voicesPlayed) || !s.voicesPlayed.length)
+      s.voicesPlayed = [0, 1, 2, 3];
+    s.voicesPlayed = s.voicesPlayed.filter((i) => i >= 0 && i < 4);
+    if (!s.voicesPlayed.length) s.voicesPlayed = [0, 1, 2, 3];
+    return s;
+  }
 
   const BUILTIN_PRESETS = [
     {
@@ -71,7 +83,7 @@
   ];
 
   function loadSettings() {
-    return { ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) };
+    return normalizeSettings({ ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) });
   }
 
   function saveSettings(settings) {
@@ -141,6 +153,7 @@
     updateHistory,
     clearHistory,
     stats,
+    normalizeSettings,
     isDegraded: () => degraded,
   };
 })();

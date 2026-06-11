@@ -25,19 +25,25 @@ Everything (chorale data, notation engine, fonts) is bundled locally, so it work
 | **Generated** | rule-based melodies, difficulty 1–4 | four-part progressions with **Roman numeral answers**, difficulty 1–4 |
 
 **Generated difficulty ladder (harmonic):** 1 = I/IV/V/V7 + cadences · 2 = ii, inversions,
-cadential 6/4, vii°6 · 3 = secondary dominants, deceptive cadences, Phrygian half cadence ·
-4 = mode mixture, Neapolitan 6, German augmented sixth, vii°7.
+cadential 6/4, vii°6 · 3 = secondary dominants, tonicized mediant, deceptive cadences, Phrygian
+half cadence · 4 = mode mixture, Neapolitan 6, Italian/French/German augmented sixths, vii°7.
+
+Generated four-part writing is also embellished with **non-chord tones** — passing tones,
+neighbor tones and escape tones (diatonic and chromatic), woven in as off-beat eighths and
+scaled by difficulty — so it sounds like real chorale writing rather than block chords.
 
 Every generated exercise passes a hard voice-leading validator (ranges, spacing, no
-parallel/hidden perfects, tendency-tone resolution, doubling rules — soak-tested over
-thousands of seeds with zero violations).
+parallel/hidden perfects, tendency-tone resolution, doubling rules), and the non-chord-tone
+pass is checked to introduce no new parallels — soak-tested over thousands of seeds with zero
+violations.
 
 ### Exam-style practice controls
 
+- **Sound**: a real sampled **piano** (default) or the built-in **synth** voice
 - **Playings** (1–10) with a **timed silent gap** between them (countdown ring, skippable)
 - **Establish the key** first: I–IV–V7–I plus the tonic (off / once / before every playing)
 - Count-in clicks, tempo 40–120 BPM, fermatas held chorale-style
-- **Voices played**: all / outer only / soprano / bass (scaffold harmonic hearing)
+- **Voices played**: pick any combination of soprano / alto / tenor / bass (scaffold harmonic hearing)
 - Givens shown like an exam: key, meter, length — first note(s) behind a "peek"
 - **Random transposition** of Bach excerpts (range-safe, properly respelled) so you can't memorize the corpus
 - Auto-reveal after a final writing gap, or reveal manually (`R`)
@@ -67,10 +73,11 @@ docs/superpowers/                 design spec & implementation plan
 ## Development
 
 ```bash
-node tools/test/run.mjs            # full test suite (theory, generators, kern, ABC, timing)
+node tools/test/run.mjs            # full test suite (theory, generators, NCTs, kern, ABC, timing)
 node tools/fetch-chorales.mjs      # re-download the kern corpus into tools/cache/
 node tools/build-chorales.mjs      # rebuild js/data/chorales-data.js from the corpus
 node tools/fetch-fonts.mjs         # re-vendor fonts
+node tools/fetch-piano.mjs         # re-vendor the embedded piano samples
 ```
 
 The kern pipeline parses the corpus (pitches, durations, ties, fermatas, modal keys),
@@ -84,5 +91,8 @@ buckets them into difficulty terciles by chromaticism, rhythm and leap density.
   © 2009 Craig Stuart Sapp, **CC BY-NC-SA 4.0**. The derived `js/data/chorales-data.js`
   inherits that licence. The music itself is public domain.
 - **abcjs** — MIT. **Fraunces, Inter, Noto Music** — SIL Open Font License.
+- **Piano samples:** acoustic grand piano from the **FluidR3_GM** soundfont via
+  [gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts) (MIT), embedded
+  in `js/data/piano-samples.js`.
 - App code: MIT. This is a personal practice tool; the bundled chorale data keeps the
   overall bundle non-commercial (BY-NC-SA).

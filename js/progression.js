@@ -45,6 +45,8 @@
       iv: C([[4, 0], [6, -1], [1, 0]], 0, { fn: 'PD' }),
       bVI: C([[6, -1], [1, 0], [3, -1]], 0, { fn: 'PD' }),
       N6: C([[2, -1], [4, 0], [6, -1]], 1, { fn: 'PD' }),
+      It6: C([[6, -1], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5 }),
+      Fr43: C([[6, -1], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
       Ger65: C([[6, -1], [1, 0], [3, -1], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
     },
     minor: {
@@ -72,6 +74,8 @@
       'V/iv': C([[1, 0], [3, 1], [5, 0]], 0, { lt: 1, fn: 'T', rT: 4 }),
       'V7/iv': C([[1, 0], [3, 1], [5, 0], [7, 0]], 0, { lt: 1, seventh: 3, fn: 'T', rT: 4 }),
       N6: C([[2, -1], [4, 0], [6, 0]], 1, { fn: 'PD' }),
+      It6: C([[6, 0], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5 }),
+      Fr43: C([[6, 0], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
       Ger65: C([[6, 0], [1, 0], [3, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
     },
   };
@@ -122,19 +126,19 @@
         add('vi', [['ii6', 2], ['ii', 1], ['V', 0.6]]);
       }
       if (difficulty >= 3) {
-        add('I', [['V7/IV', 0.8], ['V/V', 0.6], ['V7/V', 0.6], ['V/vi', 0.5], ['V7/ii', 0.5]]);
-        add('I6', [['V/V', 0.7], ['V7/IV', 0.6]]);
-        add('IV', [['V/V', 0.6]]);
-        add('vi', [['V/V', 0.6], ['V65/V', 0.4]]);
-        add('ii6', [['V/V', 0.4]]);
-        add('V', [['viio7/V', 0]]); // placeholder so the key exists
-        add('I', [['viio7/V', 0.35]]);
+        add('I', [['V7/IV', 1.5], ['V/V', 1.2], ['V7/V', 1.2], ['V/vi', 1.0], ['V7/vi', 0.9], ['V/ii', 0.7], ['V7/ii', 0.9], ['viio7/V', 0.8]]);
+        add('I6', [['V/V', 1.1], ['V7/IV', 1.0], ['V7/vi', 0.6]]);
+        add('IV', [['V/V', 1.0], ['V7/V', 0.8]]);
+        add('IV6', [['V7/V', 0.5]]);
+        add('vi', [['V/V', 1.0], ['V65/V', 0.7], ['V/ii', 0.4]]);
+        add('ii6', [['V/V', 0.6]]);
+        add('ii', [['V7/V', 0.4]]);
       }
       if (difficulty >= 4) {
-        add('I', [['iv', 0.5], ['bVI', 0.3]]);
-        add('I6', [['iv', 0.4]]);
-        add('iv', [['V', 1.5], ['V7', 1]]);
-        add('bVI', [['IV', 1], ['V', 0.8]]);
+        add('I', [['iv', 0.9], ['bVI', 0.7], ['V7/IV', 0.8]]);
+        add('I6', [['iv', 0.6]]);
+        add('iv', [['V', 1.2], ['V7', 1.0], ['ii6', 0.4]]);
+        add('bVI', [['IV', 0.8], ['ii6', 0.6], ['V', 0.6]]);
       }
     } else {
       add('i', [['iv', 3], ['V', 2], ['V7', 1.2], ['i6', 1.5], ['VI', 0.8]]);
@@ -156,21 +160,25 @@
         add('V43', [['i', 1.5], ['i6', 2.5]]);
         add('V42', [['i6', 3]]);
         add('V', [['V42', 0.8]]);
+        add('i', [['VII', 1.2]]); // open the relative-major area more often
         add('VII', [['III', 3]]);
         add('III', [['iv', 1.5], ['iio6', 1], ['VI', 0.8], ['iv6', 0.6]]);
         add('VI', [['iio6', 1.5], ['iiø65', 0.8]]);
         add('i', [['iv6', 0.4]]);
       }
       if (difficulty >= 3) {
-        add('i', [['V/V', 0.5], ['V7/V', 0.5], ['V/iv', 0.6], ['V7/iv', 0.5], ['viio7/V', 0.35]]);
-        add('VI', [['V/V', 0.4]]);
-        add('iv', [['V/V', 0.4]]);
-        add('III', [['V/iv', 0.4]]);
+        add('i', [['V/V', 1.1], ['V7/V', 1.1], ['V/iv', 1.0], ['V7/iv', 0.9], ['viio7/V', 0.8], ['VII', 1.0]]);
+        add('i6', [['V7/V', 0.6], ['V/iv', 0.5]]);
+        add('VI', [['V/V', 0.7], ['V7/V', 0.5]]);
+        add('iv', [['V/V', 0.7]]);
+        add('III', [['V/iv', 0.7], ['V7/iv', 0.5]]);
+        add('VII', [['III', 2.5]]);
       }
       if (difficulty >= 4) {
-        add('i', [['viio7', 0.5]]);
-        add('i6', [['viio7', 0.4]]);
+        add('i', [['viio7', 0.7]]);
+        add('i6', [['viio7', 0.5]]);
         add('viio7', [['i', 2], ['i6', 1]]);
+        add('III', [['VII', 0.5]]);
       }
     }
     return t;
@@ -198,7 +206,13 @@
     { syms: ['IV', 'V7', 'vi'], type: 'DC', minD: 3 },
     { syms: ['N6', 'I64c', 'V7', 'I'], type: 'PAC', minD: 4 },
     { syms: ['Ger65', 'I64c', 'V7', 'I'], type: 'PAC', minD: 4 },
+    { syms: ['It6', 'I64c', 'V7', 'I'], type: 'PAC', minD: 4 },
+    { syms: ['Fr43', 'I64c', 'V7', 'I'], type: 'PAC', minD: 4 },
     { syms: ['N6', 'V'], type: 'HC', minD: 4 },
+    { syms: ['It6', 'V'], type: 'HC', minD: 4 },
+    { syms: ['Fr43', 'V'], type: 'HC', minD: 4 },
+    { syms: ['Ger65', 'I64c', 'V'], type: 'HC', minD: 4 },
+    { syms: ['V7/V', 'V'], type: 'HC', minD: 3 },
   ];
   const CADENCE_WEIGHT = { PAC: 4.5, IAC: 1.2, HC: 2.2, DC: 1.2, PHC: 1.0 };
 
@@ -211,14 +225,19 @@
     let pool = CADENCES.filter((c) => c.minD <= difficulty && c.syms.length <= maxLen);
     if (mode === 'minor' && difficulty >= 3)
       pool = pool.concat([{ syms: ['iv6', 'V'], type: 'PHC', minD: 3 }]);
-    const weighted = pool.map((c) => [c, CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)]);
+    // Favor spicier (higher-minD) cadences as difficulty rises, so chromatic
+    // cadences (N6, augmented sixths, Phrygian) actually surface at D3-D4.
+    const weighted = pool.map((c) => [
+      c,
+      (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD),
+    ]);
     const chosen = DS.rng.weighted(rng, weighted);
     const syms = mode === 'minor' ? minorize(chosen.syms) : chosen.syms.slice();
     return { syms, type: chosen.type };
   }
 
   // ---- body walk -----------------------------------------------------------
-  const CADENCE_ONLY = new Set(['I64c', 'i64c', 'N6', 'Ger65']);
+  const CADENCE_ONLY = new Set(['I64c', 'i64c', 'N6', 'It6', 'Fr43', 'Ger65']);
 
   // Can `from` move to `to` without making voice-leading impossible?
   // A chordal 7th must be able to hold or fall by step; a leading tone must
