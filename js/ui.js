@@ -392,6 +392,7 @@
       paddingright: 0,
       paddingtop: 8,
       staffwidth: 720,
+      stretchlast: false,
       selectTypes: false,
       add_classes: true,
     });

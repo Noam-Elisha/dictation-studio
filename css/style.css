@@ -77,7 +77,7 @@ body {
   gap: 16px;
   margin-bottom: 14px;
 }
-.wordmark { display: flex; align-items: baseline; gap: 14px; }
+.wordmark { display: flex; align-items: baseline; gap: 14px; white-space: nowrap; }
 .wordmark-clef {
   font-family: var(--font-music);
   font-size: 40px;
@@ -104,6 +104,12 @@ body {
   color: var(--ink-soft);
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .stats-chip { display: none; }
+  .wordmark-clef { font-size: 30px; }
+  .wordmark h1 { font-size: 24px; }
 }
 
 /* ---------- layout ---------- */

@@ -110,18 +110,18 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task G: UI (frontend-design skill) + boot
 **Files:** `index.html`, `css/style.css`, `js/ui.js`, `js/main.js`
-- [ ] Invoke superpowers/frontend-design for visual direction ("engraver's desk": warm paper, ink, oxblood accent, Fraunces display + Inter UI + Noto Music accents, hairline staff-rule motifs)
-- [ ] Settings rail (mode/source/difficulty/key/length/transpose; tempo/plays/gap/establish/count-in/fermata/voices-played/per-voice levels (advanced); first-note toggle; auto-reveal); presets row (built-ins + save/delete)
-- [ ] Stage: givens chips; state hero (idle → establishing → count-in → "Playing k of N" w/ progress bar → countdown ring → finished); transport (Start/Stop, Play again, Skip wait, Reveal)
-- [ ] Reveal: abcjs render (responsive width), RN under bass via lyrics, replay + per-voice mute/solo, transposition note ("originally in X"), self-grade trio → stats; New / Redo
-- [ ] History list (mode, source, key, grade, date, redo) + stats line; About/licenses modal; shortcuts (Space/P/S/R/N) + help; `aria-live` status; reduced-motion
-- [ ] Commit `feat: full UI`
+- [x] Invoke superpowers/frontend-design for visual direction ("engraver's desk": warm paper, ink, oxblood accent, Fraunces display + Inter UI + Noto Music accents, hairline staff-rule motifs)
+- [x] Settings rail (mode/source/difficulty/key/length/transpose; tempo/plays/gap/establish/count-in/fermata/voices-played/per-voice levels (advanced); first-note toggle; auto-reveal); presets row (built-ins + save/delete)
+- [x] Stage: givens chips; state hero (idle → establishing → count-in → "Playing k of N" w/ progress bar → countdown ring → finished); transport (Start/Stop, Play again, Skip wait, Reveal)
+- [x] Reveal: abcjs render (responsive width), RN under bass via lyrics, replay + per-voice mute/solo, transposition note ("originally in X"), self-grade trio → stats; New / Redo
+- [x] History list (mode, source, key, grade, date, redo) + stats line; About/licenses modal; shortcuts (Space/P/S/R/N) + help; `aria-live` status; reduced-motion
+- [x] Commit `feat: full UI`
 
 ### Task H: Browser verification + design iteration
-- [ ] Playwright over `file://…/index.html`: console clean on load; run melodic+harmonic flows (2 plays, short gap) → reveal shows SVG; redo reproduces identical ABC; history persists after reload; mobile 390px layout sane
-- [ ] Screenshots desktop/mobile → iterate design per frontend-design eye (spacing, hierarchy, states) until professional
-- [ ] Commit fixes
+- [x] Playwright over `file://…/index.html`: console clean on load; run melodic+harmonic flows (2 plays, short gap) → reveal shows SVG; redo reproduces identical ABC; history persists after reload; mobile 390px layout sane
+- [x] Screenshots desktop/mobile → iterate design per frontend-design eye (spacing, hierarchy, states) until professional
+- [x] Commit fixes
 
 ### Task I: README + finish
-- [ ] README: what/why, quick start (double-click `index.html` or any static host), feature tour, practice-method notes, regenerating data, licenses/attribution (abcjs MIT; Bach encodings craigsapp/bach-370-chorales; fonts OFL)
-- [ ] `.gitignore` (`tools/cache/`), superpowers:verification-before-completion (full test run + browser pass), final commit
+- [x] README: what/why, quick start (double-click `index.html` or any static host), feature tour, practice-method notes, regenerating data, licenses/attribution (abcjs MIT; Bach encodings craigsapp/bach-370-chorales; fonts OFL)
+- [x] `.gitignore` (`tools/cache/`), superpowers:verification-before-completion (full test run + browser pass), final commit
