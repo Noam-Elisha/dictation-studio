@@ -97,9 +97,9 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task E: Excerpt + ABC (TDD)
 **Files:** `js/excerpt.js`, `js/abc.js`, `tools/test/excerpt.test.mjs`, `tools/test/abc.test.mjs`
-- [ ] Failing tests — excerpt: Bach phrase slice has aligned voice durations & correct `upbeat`; transposition window respects ranges & |fifths| ≤ 6; respelled key correct; generated harmonic assembly: chords→notes, romans ticks correct, meter fill exact; melodic assembly
-- [ ] Failing tests — abc: golden header (`%%score {(S A) | (T B)}`, clefs, `K:`, `M:`, `L:1/32`); accidental logic (F# in G major emitted bare; F natural emits `=F`; accidental persists in measure → second F# after natural re-emits `^F`; octave-specific); ties `-`, fermata `!fermata!`, beat-grouped beaming spaces, bar `|` placement incl. upbeat, RN `w:` line count matches bass notes (skip-syllable `*` for held bass)
-- [ ] Implement both; green; commit `feat: excerpt assembly + ABC engraving conversion`
+- [x] Failing tests — excerpt: Bach phrase slice has aligned voice durations & correct `upbeat`; transposition window respects ranges & |fifths| ≤ 6; respelled key correct; generated harmonic assembly: chords→notes, romans ticks correct, meter fill exact; melodic assembly
+- [x] Failing tests — abc: golden header (`%%score {(S A) | (T B)}`, clefs, `K:`, `M:`, `L:1/32`); accidental logic (F# in G major emitted bare; F natural emits `=F`; accidental persists in measure → second F# after natural re-emits `^F`; octave-specific); ties `-`, fermata `!fermata!`, beat-grouped beaming spaces, bar `|` placement incl. upbeat, RN `w:` line count matches bass notes (skip-syllable `*` for held bass)
+- [x] Implement both; green; commit `feat: excerpt assembly + ABC engraving conversion`
 
 ### Task F: Synth + session + storage
 **Files:** `js/synth.js`, `js/session.js`, `js/storage.js` (+ `tools/test/session.test.mjs` for plan-building math)
