@@ -103,10 +103,10 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task F: Synth + session + storage
 **Files:** `js/synth.js`, `js/session.js`, `js/storage.js` (+ `tools/test/session.test.mjs` for plan-building math)
-- [ ] Synth: lazy ctx; `Player` with 25 ms lookahead loop & 120 ms horizon, `stop()` cancels cleanly (no stuck tones — track live nodes, fast release on master); piano voice (triangle + 2f sine partial, exp decay, lowpass, velocity); woodblock-ish click; per-voice `GainNode[4]` + master soft compressor; `buildCadence(key)` via voicing on I-IV-V7-I + tonic octave
-- [ ] Session: timeline builder — events from excerpt at tempo (fermata ×2 toggle), schedules: establish? → count-in? → N plays with gap countdowns (200 ms UI tick, skippable, extra-play inserts another play, stop→idle); auto-reveal toggle; emits `state`, `tick`, `playProgress`
-- [ ] Tested in Node: pure helpers (`excerptToEvents` timing incl. fermata stretch & per-voice selection, gap schedule math)
-- [ ] Commit `feat: audio engine + practice session state machine + storage`
+- [x] Synth: lazy ctx; `Player` with 25 ms lookahead loop & 120 ms horizon, `stop()` cancels cleanly (no stuck tones — track live nodes, fast release on master); piano voice (triangle + 2f sine partial, exp decay, lowpass, velocity); woodblock-ish click; per-voice `GainNode[4]` + master soft compressor; `buildCadence(key)` via voicing on I-IV-V7-I + tonic octave
+- [x] Session: timeline builder — events from excerpt at tempo (fermata ×2 toggle), schedules: establish? → count-in? → N plays with gap countdowns (200 ms UI tick, skippable, extra-play inserts another play, stop→idle); auto-reveal toggle; emits `state`, `tick`, `playProgress`
+- [x] Tested in Node: pure helpers (`excerptToEvents` timing incl. fermata stretch & per-voice selection, gap schedule math)
+- [x] Commit `feat: audio engine + practice session state machine + storage`
 
 ### Task G: UI (frontend-design skill) + boot
 **Files:** `index.html`, `css/style.css`, `js/ui.js`, `js/main.js`
