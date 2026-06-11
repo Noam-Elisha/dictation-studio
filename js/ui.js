@@ -383,22 +383,33 @@
     $('#answer-body').hidden = false;
     $('#answer-meta').textContent = answerMetaText(ex);
 
-    const abcStr = DS.abc.fromExcerpt(ex, { showRomans: current.settings.showRomans });
-    $('#notation').innerHTML = '';
-    window.ABCJS.renderAbc($('#notation'), abcStr, {
+    renderNotation();
+    renderStudyControls();
+    renderGradeRow();
+  }
+
+  // Engrave at the container's real width so abcjs lays the music out at native
+  // size and breaks systems to fit, instead of shrinking a fixed-width layout
+  // down to ~40% on a phone.
+  function renderNotation() {
+    if (!current || !current.excerpt) return;
+    const host = $('#notation');
+    const avail = host.clientWidth || (host.parentElement && host.parentElement.clientWidth) || 320;
+    const staffwidth = Math.max(260, Math.min(740, Math.round(avail)));
+    const abcStr = DS.abc.fromExcerpt(current.excerpt, { showRomans: current.settings.showRomans });
+    host.innerHTML = '';
+    window.ABCJS.renderAbc(host, abcStr, {
       responsive: 'resize',
-      scale: 1.06,
+      scale: avail < 480 ? 1 : 1.06,
       paddingleft: 0,
       paddingright: 0,
       paddingtop: 8,
-      staffwidth: 720,
+      staffwidth,
       stretchlast: false,
       selectTypes: false,
       add_classes: true,
     });
-
-    renderStudyControls();
-    renderGradeRow();
+    current._notationWidth = staffwidth;
   }
 
   function renderStudyControls() {
@@ -650,6 +661,18 @@
       renderHistory();
       renderStatsChip();
       wireKeyboard();
+
+      // Re-engrave the answer when the usable width changes (rotate, resize).
+      // Width-gated so mobile address-bar height changes don't trigger work.
+      let resizeT = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeT);
+        resizeT = setTimeout(() => {
+          if (!current || !current.revealed) return;
+          const avail = Math.max(260, Math.min(740, Math.round($('#notation').clientWidth || 0)));
+          if (Math.abs(avail - (current._notationWidth || 0)) > 8) renderNotation();
+        }, 160);
+      });
 
       $('#btn-about').addEventListener('click', () => $('#dlg-about').showModal());
       $('#btn-clear-history').addEventListener('click', () => {
