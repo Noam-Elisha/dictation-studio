@@ -1,0 +1,6 @@
+# Downloaded corpus cache (re-fetch with: node tools/fetch-chorales.mjs)
+tools/cache/
+
+# OS noise
+Thumbs.db
+.DS_Store
