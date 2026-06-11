@@ -92,8 +92,8 @@ Soft costs: total semitone motion; reward contrary/oblique vs. bass; S stepwise 
 
 ### Task D: Melody generator (TDD + soak)
 **Files:** `js/melody.js`, `tools/test/melody.test.mjs`
-- [ ] Failing tests: total duration = bars·mlen (+pickup handling); range ≤ 10th & within C4–G5; no aug 2nds; leaps ≤ P5 (D1–2) with compensation; ends 2̂→1̂ or 7̂→1̂ on long final; minor: ascending 6̂/7̂ raised toward tonic, descending natural; rhythm values from difficulty vocab; soak 4×2×150 seeds
-- [ ] Implement; green; commit `feat: melodic dictation generator`
+- [x] Failing tests: total duration = bars·mlen (+pickup handling); range ≤ 10th & within C4–G5; no aug 2nds; leaps ≤ P5 (D1–2) with compensation; ends 2̂→1̂ or 7̂→1̂ on long final; minor: ascending 6̂/7̂ raised toward tonic, descending natural; rhythm values from difficulty vocab; soak 4×2×150 seeds
+- [x] Implement; green; commit `feat: melodic dictation generator`
 
 ### Task E: Excerpt + ABC (TDD)
 **Files:** `js/excerpt.js`, `js/abc.js`, `tools/test/excerpt.test.mjs`, `tools/test/abc.test.mjs`
