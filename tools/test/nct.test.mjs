@@ -254,4 +254,56 @@ suite('nct: embellishment', () => {
     ok(tied > 200, `common tones are tied (${tied})`);
     ok(struck < tied * 0.12, `few re-struck repeats remain (${struck} struck vs ${tied} tied)`);
   });
+
+  test('no cross relations: the same letter never sounds with two accidentals at once', () => {
+    for (let difficulty = 4; difficulty <= 5; difficulty++) {
+      for (let seed = 0; seed < 250; seed++) {
+        const key = seed % 2 ? C_MAJOR : A_MINOR;
+        const rng = DS.rng.create(seed * 7 + difficulty * 101);
+        const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+        const block = DS.voicing.harmonize(rng, key, chords);
+        if (!block) continue;
+        const voices = DS.nct.assemble(rng, key, chords, block, { difficulty });
+        const g = gridOf(voices);
+        const ticks = new Set([0]);
+        for (const s of g) for (const e of s.notes) if (e.t < g[0].total) ticks.add(e.t);
+        const noteAt = (vi, t) => { let cur = g[vi].notes[0]; for (const e of g[vi].notes) { if (e.t <= t) cur = e; else break; } return cur.n; };
+        for (const t of ticks) {
+          const ns = [0, 1, 2, 3].map((vi) => noteAt(vi, t)).filter((n) => n.step >= 0);
+          for (let a = 0; a < ns.length; a++)
+            for (let b = a + 1; b < ns.length; b++)
+              ok(!(ns[a].step === ns[b].step && ns[a].alter !== ns[b].alter),
+                `d${difficulty} seed ${seed}: cross relation ${T.name(ns[a])}/${T.name(ns[b])} at tick ${t}`);
+        }
+      }
+    }
+  });
+
+  test('difficulty 5 favours suspensions over anticipations', () => {
+    const pc = (m) => ((m % 12) + 12) % 12;
+    let anticipations = 0, suspensions = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const key = seed % 2 ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 7 + 9);
+      const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+      const block = DS.voicing.harmonize(rng, key, chords);
+      if (!block) continue;
+      const cps = block.map((c) => new Set(c.map((p) => pc(T.midi(p)))));
+      const starts = []; let acc = 0;
+      for (const c of chords) { starts.push(acc); acc += c.dur; }
+      const ac = (t) => { for (let i = 0; i < starts.length; i++) if (t >= starts[i] && t < starts[i] + chords[i].dur) return i; return chords.length - 1; };
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 5 });
+      for (const v of voices) {
+        let t = 0;
+        for (let i = 0; i < v.length; i++) {
+          const n = v[i], nx = v[i + 1];
+          const nonChord = n.step >= 0 && !cps[ac(t)].has(pc(T.midi(n)));
+          if (nx && nonChord && t % 48 !== 0 && T.midi(n) === T.midi(nx)) anticipations++;
+          if (n.tieEnd && nonChord && nx && T.midi(nx) < T.midi(n) && T.midi(n) - T.midi(nx) <= 2) suspensions++;
+          t += n.dur;
+        }
+      }
+    }
+    ok(suspensions > anticipations, `suspensions (${suspensions}) outnumber anticipations (${anticipations})`);
+  });
 });

@@ -30,8 +30,9 @@
   // per-voice, per-beat probability of attempting a figure, by difficulty.
   // Difficulty 5 keeps the difficulty-4 harmony but embellishes maximally.
   const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46, 5: 0.92 };
-  // chance an attempted figure is an on-beat (suspension / accented passing) vs off-beat
-  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36, 5: 0.42 };
+  // chance an attempted figure is an on-beat (suspension / accented passing) vs
+  // off-beat. Difficulty 5 leans hard on suspensions (held-over notes).
+  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36, 5: 0.6 };
 
   function ic(hi, lo) {
     return (((hi - lo) % 12) + 12) % 12;
@@ -168,15 +169,18 @@
     return false;
   }
 
-  // Validate a tick window: (1) no parallel perfects, and (2) no two
-  // consecutive dissonant sonorities — a non-chord-tone clash must resolve to
-  // a consonance before the next one.
+  // Validate a tick window: (1) no parallel perfects, (2) no two consecutive
+  // dissonant sonorities — a non-chord-tone clash must resolve to a consonance
+  // before the next one — and (3) no cross relation: the same letter with two
+  // different accidentals sounding at once (e.g. E natural against E flat),
+  // which reads as one note with the accidental on only one voice and sounds
+  // a half step off.
   function windowValid(voices, lo, hi, ctx) {
     const vo = voices.map((vl) => {
       const arr = [];
       let t = 0;
       for (const n of vl) {
-        arr.push({ t, m: n.step < 0 ? null : T.midi(n) });
+        arr.push({ t, m: n.step < 0 ? null : T.midi(n), step: n.step, alter: n.alter });
         t += n.dur;
       }
       return arr;
@@ -185,24 +189,27 @@
     for (const arr of vo) for (const e of arr) if (e.t >= lo && e.t < hi) onsets.add(e.t);
     const ticks = [...onsets].sort((a, b) => a - b);
     if (!ticks.length) return true;
-    const pitchAt = (vi, tick) => {
+    const entryAt = (vi, tick) => {
       let cur = vo[vi][0];
       for (const e of vo[vi]) {
         if (e.t <= tick) cur = e;
         else break;
       }
-      return cur.m;
+      return cur;
     };
-    const sonorityAt = (tick) => [0, 1, 2, 3].map((vi) => pitchAt(vi, tick));
+    const sonorityAt = (tick) => [0, 1, 2, 3].map((vi) => entryAt(vi, tick).m);
     // seed from the sonority just before the window so motion/dissonance INTO
     // the first in-window onset is checked too
     let prev = sonorityAt(ticks[0] - 1);
     let prevDiss = dissonant(prev, ctx.chordPcs[activeChordIndex(ticks[0] - 1, ctx)]);
     for (const tick of ticks) {
-      const chord = sonorityAt(tick);
+      const ents = [0, 1, 2, 3].map((vi) => entryAt(vi, tick));
+      const chord = ents.map((e) => e.m);
       for (let a = 0; a < 4; a++)
         for (let b = a + 1; b < 4; b++) {
-          if (prev[a] == null || prev[b] == null || chord[a] == null || chord[b] == null) continue;
+          if (chord[a] == null || chord[b] == null) continue;
+          if (ents[a].step === ents[b].step && ents[a].alter !== ents[b].alter) return false; // cross relation
+          if (prev[a] == null || prev[b] == null) continue;
           const before = ic(Math.max(prev[a], prev[b]), Math.min(prev[a], prev[b]));
           const after = ic(Math.max(chord[a], chord[b]), Math.min(chord[a], chord[b]));
           const moved = prev[a] !== chord[a] && prev[b] !== chord[b];
@@ -312,9 +319,10 @@
           }
           // step motions: usually leave plain (anticipations are idiomatically
           // sparse, mostly cadential); when embellished, strongly prefer an
-          // anticipation over the (leapy) échappée
+          // anticipation over the (leapy) échappée. Difficulty 5 skips most of
+          // them — it expresses stepwise motion through suspensions instead.
           if (cands.every((c) => c.type === 'anticipation' || c.type === 'escape')) {
-            if (rng() < 0.5) continue;
+            if (rng() < (difficulty >= 5 ? 0.8 : 0.5)) continue;
             const ant = cands.filter((c) => c.type === 'anticipation');
             const esc = cands.filter((c) => c.type === 'escape');
             cands = ant.length && rng() < 0.85 ? ant : esc.length ? esc : cands;
