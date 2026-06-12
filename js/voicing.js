@@ -230,6 +230,15 @@
       }
     }
 
+    // chordal seventh must be PREPARED: held as a common tone from the previous
+    // chord, or failing that approached by step — never leapt into.
+    if (!sameHarmony && curCtx.sevPc != null) {
+      for (let v = 0; v < 4; v++) {
+        if (((cm[v] % 12) + 12) % 12 !== curCtx.sevPc) continue;
+        if (Math.abs(cm[v] - pm[v]) > 2) return `seventh approached by leap in voice ${v}`;
+      }
+    }
+
     // cadential 6/4 voice obligations
     if (prevCtx.spec.cad64 && curCtx.spec.fn === 'D' && !curCtx.spec.cad64) {
       const tonicPc = prevCtx.rolePc.root;
@@ -307,6 +316,19 @@
     return cost;
   }
 
+  // Soft lookahead: 0 if some voice is within a step of the coming seventh's
+  // pitch class (so it can prepare it), else a penalty. Skipped when the same
+  // seventh simply continues (it is already a common tone).
+  function prepCost(cand, nextSevPc, ownSevPc) {
+    if (nextSevPc === ownSevPc) return 0;
+    for (const m of cand.midis) {
+      const pcm = ((m % 12) + 12) % 12;
+      const d = ((nextSevPc - pcm) % 12 + 12) % 12;
+      if (Math.min(d, 12 - d) <= 2) return 0;
+    }
+    return 6;
+  }
+
   // ---- beam search ---------------------------------------------------------
 
   // Keep the beam diverse in soprano pitch class so a final soprano
@@ -362,15 +384,17 @@
     );
 
     for (let i = 1; i < chords.length; i++) {
+      // anticipate the next chord's seventh: prefer voicings of chord i that
+      // already have a voice on (or a step from) chord i+1's seventh, so it can
+      // be prepared without a leap
+      const nextSevPc = i + 1 < chords.length ? ctxs[i + 1].sevPc : null;
       const next = [];
       for (const state of beam) {
         for (const cand of candLists[i]) {
           if (transitionError(ctxs[i - 1], state.cand, ctxs[i], cand)) continue;
-          next.push({
-            cand,
-            cost: state.cost + transitionCost(state.cand, cand, rng),
-            parent: state,
-          });
+          let cost = state.cost + transitionCost(state.cand, cand, rng);
+          if (nextSevPc != null) cost += prepCost(cand, nextSevPc, ctxs[i].sevPc);
+          next.push({ cand, cost, parent: state });
         }
       }
       if (!next.length) return null;

@@ -116,7 +116,10 @@
         add('IV6', [['V', 1.5], ['V6', 1], ['ii65', 0.8]]);
         add('ii', [['V', 2], ['V7', 1.5], ['viio6', 0.6], ['ii6', 0.6]]);
         add('ii6', [['V', 2.5], ['V7', 1.8], ['viio6', 0.6], ['V65', 0.6]]);
-        add('ii65', [['V', 2.5], ['V7', 1.5]]);
+        // ii65 -> V (triad): its own 7th resolves into V, avoiding an
+        // unpreparable second 7th (V7's seventh can't be reached from ii65
+        // without a leap)
+        add('ii65', [['V', 3]]);
         add('viio6', [['I', 2], ['I6', 2.2]]);
         add('V6', [['I', 3]]);
         add('V65', [['I', 3]]);
@@ -153,7 +156,7 @@
         add('iv', [['iio6', 0.6], ['V42', 0.6], ['viio6', 0.4]]);
         add('iv6', [['V', 2], ['V7', 1]]);
         add('iio6', [['V', 2.5], ['V7', 1.8], ['V65', 0.6]]);
-        add('iiø65', [['V', 2.2], ['V7', 1.6]]);
+        add('iiø65', [['V', 3]]); // -> V triad (see ii65 note in major)
         add('viio6', [['i', 2], ['i6', 2.2]]);
         add('V6', [['i', 3]]);
         add('V65', [['i', 3]]);
@@ -194,7 +197,7 @@
     { syms: ['I64c', 'V7', 'I'], type: 'PAC', minD: 1 },
     { syms: ['ii6', 'V7', 'I'], type: 'PAC', minD: 2 },
     { syms: ['ii6', 'V', 'I'], type: 'PAC', minD: 2 },
-    { syms: ['ii65', 'V7', 'I'], type: 'PAC', minD: 2 },
+    { syms: ['ii65', 'V', 'I'], type: 'PAC', minD: 2 },
     { syms: ['ii6', 'I64c', 'V7', 'I'], type: 'PAC', minD: 2 },
     { syms: ['IV', 'I64c', 'V7', 'I'], type: 'PAC', minD: 2 },
     { syms: ['V6', 'I'], type: 'IAC', minD: 2 },

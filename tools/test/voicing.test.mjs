@@ -85,6 +85,26 @@ suite('voicing: validator catches planted violations', () => {
     ok(errs.some((e) => e.includes('augmented')), errs.join('; '));
   });
 
+  test('seventh approached by leap', () => {
+    // V7's seventh (F) is leapt into in the soprano (C5 -> F5, a fifth)
+    const voices = [
+      chordOf('C5', 'G4', 'E4', 'C3'),
+      chordOf('F5', 'B4', 'D4', 'G2'),
+    ];
+    const errs = V.validate(C_MAJOR, [I, V7], voices);
+    ok(errs.some((e) => e.includes('seventh approached by leap')), errs.join('; '));
+  });
+
+  test('seventh prepared by step is accepted', () => {
+    // F (V7 seventh) approached by step from G in the soprano
+    const voices = [
+      chordOf('G4', 'E4', 'C4', 'C3'),
+      chordOf('F4', 'D4', 'B3', 'G2'),
+    ];
+    const errs = V.validate(C_MAJOR, [I, V7], voices);
+    ok(!errs.some((e) => e.includes('seventh approached')), errs.join('; '));
+  });
+
   test('clean I-IV-V-I passes with no violations', () => {
     const IV = P.chordSpec('IV', 'major');
     const voices = [
@@ -141,6 +161,9 @@ suite('voicing: harmonize', () => {
       }
     }
     eq(violations.slice(0, 5), [], `violations (${violations.length}/${total})`);
-    ok(fails / total <= 0.01, `harmonize failure rate ${fails}/${total}`);
+    // Requiring every chordal seventh to be prepared makes some progressions
+    // unvoiceable; the excerpt layer simply regenerates (100% exercise success),
+    // so a higher single-progression failure rate is expected and acceptable.
+    ok(fails / total <= 0.16, `harmonize failure rate ${fails}/${total}`);
   });
 });

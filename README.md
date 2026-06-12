@@ -36,9 +36,11 @@ top difficulty) and scaled down for easier exercises; any voice, including the b
 embellished and multiple voices may move at once.
 
 Every generated exercise passes a hard voice-leading validator (ranges, spacing, no
-parallel/hidden perfects, tendency-tone resolution, doubling rules), and the non-chord-tone
-pass is checked to introduce no new parallels — soak-tested over thousands of seeds with zero
-violations.
+parallel/hidden perfects, tendency-tone resolution, doubling rules). **Dissonances are
+prepared**: a chordal seventh is approached as a held common tone or by step (never leapt
+into), suspensions are prepared by a tied common tone, and every non-chord tone is approached
+by step — and the embellishment pass is checked to introduce no new parallels and never two
+dissonant sonorities in a row. Soak-tested over thousands of seeds with zero violations.
 
 ### Exam-style practice controls
 

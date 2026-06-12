@@ -91,21 +91,21 @@
     return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
   }
 
-  // On-beat figure occupying the START of chord i+1 (the first eighth) in voice
-  // v, resolving to the chord tone p2 = block[i+1][v].
-  //  - suspension: p1 (chord i) is held over (tied) then falls a step to p2
-  //  - appoggiatura: an accented step above/below p2, struck on the beat
+  // On-beat (accented) figure occupying the START of chord i+1 (the first
+  // eighth) in voice v, resolving to the chord tone p2 = block[i+1][v]. Both
+  // options approach the dissonance by step / prepared common tone — never a
+  // leap into the dissonance (no appoggiatura).
+  //  - suspension: p1 (chord i) is held over (tied), then falls a step to p2
+  //  - accented passing tone: p1 and p2 a third apart, the diatonic note
+  //    between struck on the beat (stepwise in and out)
   function onbeatCandidates(key, p1, p2, difficulty) {
     const out = [];
     const iv = T.intervalBetween(p1, p2);
-    // suspension: preparation a step above the resolution (4-3 / 7-6 / 9-8 / 2-3)
     if (iv.d === -1 && (iv.s === -1 || iv.s === -2)) {
       out.push({ type: 'suspension', pitch: p1, tie: true });
     }
-    if (difficulty >= 3) {
-      // appoggiatura: a step above the chord tone, leapt to, resolving down
-      const above = diatonicStep(key, p2, 1);
-      if (!isAugmented(p1, above)) out.push({ type: 'appoggiatura', pitch: above, tie: false });
+    if (difficulty >= 3 && Math.abs(iv.d) === 2 && (Math.abs(iv.s) === 3 || Math.abs(iv.s) === 4)) {
+      out.push({ type: 'accented passing', pitch: diatonicStep(key, p1, Math.sign(iv.d)), tie: false });
     }
     return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
   }
