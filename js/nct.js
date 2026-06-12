@@ -24,7 +24,7 @@
   const E = 24; // eighth note
 
   // per-voice, per-beat probability of attempting a figure, by difficulty
-  const P_BASE = { 1: 0.1, 2: 0.28, 3: 0.42, 4: 0.55 };
+  const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46 };
   // chance an attempted figure is an on-beat suspension/appoggiatura vs off-beat
   const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36 };
 
@@ -142,8 +142,31 @@
     return [0, 1, 2, 3].map((v) => buildVoice(block, chords, v, off, on));
   }
 
-  // Scan a tick window for parallel perfects between any pair of voices.
-  function windowOK(voices, lo, hi) {
+  const pc = (m) => ((m % 12) + 12) % 12;
+
+  function activeChordIndex(tick, ctx) {
+    for (let i = 0; i < ctx.starts.length; i++)
+      if (tick >= ctx.starts[i] && tick < ctx.starts[i] + ctx.durs[i]) return i;
+    return ctx.starts.length - 1;
+  }
+
+  // A sonority is dissonant when a non-chord tone forms a literal second
+  // (one or two semitones) with another sounding voice.
+  function dissonant(sonority, chordPcs) {
+    for (let a = 0; a < 4; a++)
+      for (let b = a + 1; b < 4; b++) {
+        if (sonority[a] == null || sonority[b] == null) continue;
+        const d = Math.abs(sonority[a] - sonority[b]);
+        if (d !== 1 && d !== 2) continue;
+        if (!chordPcs.has(pc(sonority[a])) || !chordPcs.has(pc(sonority[b]))) return true;
+      }
+    return false;
+  }
+
+  // Validate a tick window: (1) no parallel perfects, and (2) no two
+  // consecutive dissonant sonorities — a non-chord-tone clash must resolve to
+  // a consonance before the next one.
+  function windowValid(voices, lo, hi, ctx) {
     const vo = voices.map((vl) => {
       const arr = [];
       let t = 0;
@@ -165,22 +188,25 @@
       }
       return cur.m;
     };
-    // seed `prev` from the sonority just before the window so the motion INTO
+    const sonorityAt = (tick) => [0, 1, 2, 3].map((vi) => pitchAt(vi, tick));
+    // seed from the sonority just before the window so motion/dissonance INTO
     // the first in-window onset is checked too
-    let prev = [0, 1, 2, 3].map((vi) => pitchAt(vi, ticks[0] - 1));
+    let prev = sonorityAt(ticks[0] - 1);
+    let prevDiss = dissonant(prev, ctx.chordPcs[activeChordIndex(ticks[0] - 1, ctx)]);
     for (const tick of ticks) {
-      const chord = [0, 1, 2, 3].map((vi) => pitchAt(vi, tick));
-      if (prev) {
-        for (let a = 0; a < 4; a++)
-          for (let b = a + 1; b < 4; b++) {
-            if (prev[a] == null || prev[b] == null || chord[a] == null || chord[b] == null) continue;
-            const before = ic(Math.max(prev[a], prev[b]), Math.min(prev[a], prev[b]));
-            const after = ic(Math.max(chord[a], chord[b]), Math.min(chord[a], chord[b]));
-            const moved = prev[a] !== chord[a] && prev[b] !== chord[b];
-            if (moved && isPerfect(after) && before === after) return false;
-          }
-      }
+      const chord = sonorityAt(tick);
+      for (let a = 0; a < 4; a++)
+        for (let b = a + 1; b < 4; b++) {
+          if (prev[a] == null || prev[b] == null || chord[a] == null || chord[b] == null) continue;
+          const before = ic(Math.max(prev[a], prev[b]), Math.min(prev[a], prev[b]));
+          const after = ic(Math.max(chord[a], chord[b]), Math.min(chord[a], chord[b]));
+          const moved = prev[a] !== chord[a] && prev[b] !== chord[b];
+          if (moved && isPerfect(after) && before === after) return false;
+        }
+      const diss = dissonant(chord, ctx.chordPcs[activeChordIndex(tick, ctx)]);
+      if (diss && prevDiss) return false; // two dissonant sonorities in a row
       prev = chord;
+      prevDiss = diss;
     }
     return true;
   }
@@ -213,6 +239,11 @@
     const total = acc;
     const pBase = P_BASE[difficulty];
     const pOn = P_ONBEAT[difficulty];
+    const diss = {
+      starts,
+      durs: chords.map((c) => c.dur),
+      chordPcs: block.map((ch) => new Set(ch.map((p) => pc(T.midi(p))))),
+    };
 
     for (let i = 0; i < n - 1; i++) {
       if (chords[i].dur < 2 * E) continue;
@@ -254,13 +285,13 @@
           on[v].set(i + 1, chosen);
           const lo = starts[i + 1] - E;
           const hi = Math.min(total, starts[i + 1] + chords[i + 1].dur + 1);
-          if (windowOK(buildAll(block, chords, off, on), lo, hi)) placed++;
+          if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) placed++;
           else on[v].delete(i + 1);
         } else {
           off[v].set(i, chosen.pitch);
           const lo = starts[i];
           const hi = Math.min(total, starts[i] + chords[i].dur + chords[i + 1].dur + 1);
-          if (windowOK(buildAll(block, chords, off, on), lo, hi)) placed++;
+          if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) placed++;
           else off[v].delete(i);
         }
       }
