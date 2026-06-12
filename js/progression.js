@@ -46,9 +46,9 @@
       iv: C([[4, 0], [6, -1], [1, 0]], 0, { fn: 'PD' }),
       bVI: C([[6, -1], [1, 0], [3, -1]], 0, { fn: 'PD' }),
       N6: C([[2, -1], [4, 0], [6, -1]], 1, { fn: 'PD' }),
-      It6: C([[6, -1], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5 }),
-      Fr43: C([[6, -1], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
-      Ger65: C([[6, -1], [1, 0], [3, -1], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
+      It6: C([[6, -1], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5, aug6: true }),
+      Fr43: C([[6, -1], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5, aug6: true }),
+      Ger65: C([[6, -1], [1, 0], [3, -1], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5, aug6: true }),
     },
     minor: {
       i: C([[1, 0], [3, 0], [5, 0]], 0),
@@ -75,9 +75,9 @@
       'V/iv': C([[1, 0], [3, 1], [5, 0]], 0, { lt: 1, fn: 'T', rT: 4 }),
       'V7/iv': C([[1, 0], [3, 1], [5, 0], [7, 0]], 0, { lt: 1, seventh: 3, fn: 'T', rT: 4 }),
       N6: C([[2, -1], [4, 0], [6, 0]], 1, { fn: 'PD' }),
-      It6: C([[6, 0], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5 }),
-      Fr43: C([[6, 0], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
-      Ger65: C([[6, 0], [1, 0], [3, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5 }),
+      It6: C([[6, 0], [1, 0], [4, 1]], 0, { lt: 2, fn: 'PD', rT: 5, aug6: true }),
+      Fr43: C([[6, 0], [1, 0], [2, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5, aug6: true }),
+      Ger65: C([[6, 0], [1, 0], [3, 0], [4, 1]], 0, { lt: 3, fn: 'PD', rT: 5, aug6: true }),
     },
   };
 
@@ -430,41 +430,106 @@
       : { 1: 'i', 2: 'iio6', 4: 'iv', 6: 'VI' }[degree];
   }
 
-  // A multi-phrase progression that modulates to a closely related key in its
-  // final phrase via a diatonic common chord, confirmed by a PAC in the new
-  // key. Earlier phrases stay in the home key. Each chord carries its governing
-  // `key`; the pivot carries a `keyChange` label.
-  function generateModulating(rng, { difficulty, mode, phrases, key1 }) {
-    const targets = closelyRelated(key1);
-    const W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
-    const key2 = DS.rng.weighted(rng, targets.map((t) => [t, W[t.label] || 0.5]));
-    const dg2 = findPivot(key1, key2);
-    if (dg2 == null) return null;
+  // Closely related targets that stay within five accidentals and have a
+  // diatonic common-chord pivot from `key`.
+  function modTargets(key) {
+    return closelyRelated(key).filter(
+      (k) => Math.abs(T.fifths(k)) <= 5 && findPivot(key, k) != null
+    );
+  }
+  const MOD_W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
 
+  // `count` non-adjacent phrase indices in [0, phrases) (so a freshly reached
+  // key always gets at least one phrase to settle before the next pivot).
+  // First-phrase modulation is allowed but disfavored — usually the home key
+  // is worth establishing before leaving it.
+  function pickModIndices(rng, phrases, count) {
+    const sets = [];
+    const rec = (start, chosen) => {
+      if (chosen.length === count) { sets.push(chosen.slice()); return; }
+      for (let i = start; i < phrases; i++) {
+        if (chosen.length && i - chosen[chosen.length - 1] < 2) continue;
+        chosen.push(i); rec(i + 1, chosen); chosen.pop();
+      }
+    };
+    rec(0, []);
+    if (!sets.length) return [];
+    return DS.rng.weighted(rng, sets.map((s) => [s, s.includes(0) ? 0.4 : 1]));
+  }
+
+  // One two-bar phrase that pivots from curKey into newKey and confirms it:
+  // tonic(cur) | pivot(new) V7(new) | tonic(new, held).
+  function modPhrase(curKey, newKey, dg2) {
+    const tonicC = curKey.mode === 'minor' ? 'i' : 'I';
+    const tonicN = newKey.mode === 'minor' ? 'i' : 'I';
+    const label = T.name(newKey.tonic).replace('#', '♯').replace('b', '♭') + ':';
+    const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
+    return [
+      mk(tonicC, curKey, 96),
+      mk(pivotSym(newKey.mode, dg2), newKey, 48, { keyChange: label }),
+      mk('V7', newKey, 48),
+      mk(tonicN, newKey, 192, { sopranoEnd: [1] }),
+    ];
+  }
+
+  // A multi-phrase progression with a progressive tonal plan: it may modulate
+  // as early as the first phrase, then continue in the new key, sometimes
+  // modulating again (never two pivots in adjacent phrases). Each modulation
+  // lands on a closely related key via a diatonic common-chord pivot; the piece
+  // ends with a PAC in its final key. Stay-phrases use ordinary open cadences
+  // (authentic on the last). Each chord carries its governing `key`; every pivot
+  // carries a `keyChange` label.
+  function generateModulating(rng, { difficulty, mode, phrases, key1 }) {
+    const maxMods = Math.min(2, Math.ceil(phrases / 2));
+    const nMods = maxMods <= 1 ? 1 : DS.rng.weighted(rng, [[1, 0.75], [2, 0.25]]);
+    const modAt = new Set(pickModIndices(rng, phrases, nMods));
+
+    let curKey = key1;
     const all = [];
     const phraseEnds = [];
-    for (let p = 0; p < phrases - 1; p++) {
-      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: 'open' });
-      for (const c of ph) { c.key = key1; all.push(c); }
+    const path = [key1];
+    let modulated = false;
+    let lastCadence = 'PAC';
+
+    for (let p = 0; p < phrases; p++) {
+      const isLast = p === phrases - 1;
+      let phraseChords = null;
+
+      if (modAt.has(p)) {
+        let targets = modTargets(curKey);
+        // a modulation in the very first phrase leaves home barely stated, so
+        // skip the relative key (same signature) — it would be imperceptible
+        if (p === 0) targets = targets.filter((k) => T.fifths(k) !== T.fifths(key1));
+        if (targets.length) {
+          const newKey = DS.rng.weighted(rng, targets.map((t) => [t, MOD_W[t.label] || 0.5]));
+          const dg2 = findPivot(curKey, newKey);
+          if (dg2 != null) {
+            phraseChords = modPhrase(curKey, newKey, dg2);
+            curKey = newKey;
+            path.push({ tonic: newKey.tonic, mode: newKey.mode });
+            modulated = true;
+            if (isLast) lastCadence = 'PAC';
+          }
+        }
+      }
+
+      if (!phraseChords) {
+        phraseChords = generate(rng, {
+          difficulty, mode: curKey.mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open',
+        });
+        for (const c of phraseChords) c.key = curKey;
+        if (isLast) lastCadence = phraseChords.cadence;
+      }
+
+      for (const c of phraseChords) all.push(c);
       phraseEnds.push(all.length - 1);
     }
 
-    const tonic1 = mode === 'minor' ? 'i' : 'I';
-    const tonic2 = key2.mode === 'minor' ? 'i' : 'I';
-    const label = T.name(key2.tonic).replace('#', '♯').replace('b', '♭') + ':';
-    const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
-    // I(home) | pivot(new-key predominant) V7(new) | I(new, held)
-    const seq = [
-      mk(tonic1, key1, 96),
-      mk(pivotSym(key2.mode, dg2), key2, 48, { keyChange: label }),
-      mk('V7', key2, 48),
-      mk(tonic2, key2, 192, { sopranoEnd: [1] }),
-    ];
-    for (const c of seq) all.push(c);
-    phraseEnds.push(all.length - 1);
+    if (!modulated) return null; // caller falls back to a non-modulating plan
+
     all.phraseEnds = phraseEnds;
-    all.cadence = 'PAC';
-    all.modulation = { from: key1, to: key2 };
+    all.cadence = lastCadence;
+    all.modulation = { from: key1, to: { tonic: curKey.tonic, mode: curKey.mode }, path };
     return all;
   }
 

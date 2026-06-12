@@ -32,7 +32,9 @@ they're structured like a real chorale.
 cadential 6/4, vii°6 · 3 = secondary dominants, tonicized mediant, deceptive cadences, Phrygian
 half cadence · 4 = mode mixture, Neapolitan 6, Italian/French/German augmented sixths, vii°7, and
 **occasional modulation** to a closely related key — confirmed by a common-chord pivot (labelled
-in the answer, e.g. `G:ii6`) and a cadence in the new key — more likely the longer the exercise.
+in the answer, e.g. `G:ii6`) and a cadence in the new key. A modulation can arrive as early as the
+first phrase and the music then continues in the new key, sometimes modulating more than once;
+longer exercises modulate more often. Keys stay within five accidentals.
 
 Generated four-part writing uses a **quarter-note harmonic rhythm** (one chord per beat, like a
 real chorale) and is embellished with **non-chord tones** — passing tones, neighbor tones,

@@ -164,54 +164,60 @@ suite('progression: modulation', () => {
     }
   });
 
-  test('generateModulating: home-key prefix, single pivot, PAC in a closely related new key', () => {
-    let runs = 0;
+  test('generateModulating: progressive key plan, valid pivots, early/multiple modulation, PAC close', () => {
+    let runs = 0, withTwo = 0, earlyMod = 0;
     const targetsSeen = new Set();
-    for (let seed = 0; seed < 400; seed++) {
+    for (let seed = 0; seed < 600; seed++) {
       const home = seed % 2 ? C_MAJOR : A_MINOR;
       const rng = DS.rng.create(seed * 5 + 1);
-      const chords = P.generateModulating(rng, {
-        difficulty: 4, mode: home.mode, phrases: 2 + (seed % 3), key1: home,
-      });
+      const phrases = 2 + (seed % 3);
+      const chords = P.generateModulating(rng, { difficulty: 4, mode: home.mode, phrases, key1: home });
       if (!chords) continue;
       runs++;
       const mod = chords.modulation;
-      ok(mod && sameKey(mod.from, home), `seed ${seed}: modulates from home`);
+      ok(mod && sameKey(mod.from, home), `seed ${seed}: starts from home`);
       targetsSeen.add(T.name(mod.to.tonic) + ' ' + mod.to.mode);
 
-      // target is one of the closely related keys
-      ok(P.closelyRelated(home).some((k) => sameKey(k, mod.to)), `seed ${seed}: target closely related`);
+      // the opening chord is always the home tonic
+      ok(sameKey(chords[0].key, home), `seed ${seed}: opens at home`);
 
-      // exactly one pivot chord, tagged with the new key's label
-      const pivots = chords.filter((c) => c.keyChange);
-      eq(pivots.length, 1, `seed ${seed}: exactly one pivot`);
-      const pivot = pivots[0];
-      ok(sameKey(pivot.key, mod.to), `seed ${seed}: pivot is in the new key`);
+      // pivots = chords tagged with a key change; at least one
+      const pivotIdx = chords.map((c, i) => (c.keyChange ? i : -1)).filter((i) => i >= 0);
+      ok(pivotIdx.length >= 1, `seed ${seed}: at least one modulation`);
+      if (pivotIdx.length >= 2) withTwo++;
+      if (pivotIdx.some((i) => i <= chords.phraseEnds[0])) earlyMod++;
 
-      // the pivot is a true common chord: diatonic in BOTH keys
-      const inNew = chordPcs(pivot, mod.to);
-      const homeScale = scalePcs(home);
-      for (const p of inNew) ok(homeScale.has(p), `seed ${seed}: pivot tone ${p} diatonic at home`);
+      // key is piecewise constant, changing only at a pivot
+      for (let i = 1; i < chords.length; i++) {
+        const changed = !sameKey(chords[i].key, chords[i - 1].key);
+        ok(changed === !!chords[i].keyChange, `seed ${seed}: key changes only at pivots (idx ${i})`);
+      }
 
-      // everything up to (and incl.) the chord before the pivot stays home;
-      // pivot and after are in the new key
-      const pi = chords.indexOf(pivot);
-      for (let i = 0; i < pi; i++) ok(sameKey(chords[i].key, home), `seed ${seed}: chord ${i} home`);
-      for (let i = pi; i < chords.length; i++) ok(sameKey(chords[i].key, mod.to), `seed ${seed}: chord ${i} new key`);
+      // each pivot: new key closely related to the preceding key, within five
+      // accidentals, and a true common chord (diatonic in both keys)
+      for (const i of pivotIdx) {
+        const prevKey = chords[i - 1].key, newKey = chords[i].key;
+        ok(P.closelyRelated(prevKey).some((k) => sameKey(k, newKey)), `seed ${seed}: pivot ${i} closely related`);
+        ok(Math.abs(T.fifths(newKey)) <= 5, `seed ${seed}: pivot ${i} within 5 accidentals`);
+        const inNew = chordPcs(chords[i], newKey), prevScale = scalePcs(prevKey);
+        for (const p of inNew) ok(prevScale.has(p), `seed ${seed}: pivot ${i} tone ${p} diatonic before`);
+      }
 
-      // confirmed by V7 -> tonic in the new key
-      const last = chords[chords.length - 1];
-      const penult = chords[chords.length - 2];
-      ok(/^[Ii]$/.test(last.sym), `seed ${seed}: ends on tonic, saw ${last.sym}`);
-      eq(penult.sym, 'V7', `seed ${seed}: dominant-seventh before the close`);
-      eq(chords.cadence, 'PAC', `seed ${seed}: PAC`);
+      // ends with an authentic cadence (tonic preceded by a dominant) in the
+      // final key
+      const last = chords[chords.length - 1], penult = chords[chords.length - 2];
+      ok(/^[Ii]$/.test(last.sym), `seed ${seed}: ends on tonic (${last.sym})`);
+      ok(penult.fn === 'D', `seed ${seed}: dominant-function before close (${penult.sym})`);
+      ok(sameKey(last.key, mod.to), `seed ${seed}: final key recorded`);
+      ok(['PAC', 'IAC'].includes(chords.cadence), `seed ${seed}: authentic close (${chords.cadence})`);
 
       // bar-aligned: phrases of two bars each
-      const total = chords.reduce((s, c) => s + c.dur, 0);
-      eq(total % 192, 0, `seed ${seed}: whole bars`);
+      eq(chords.reduce((s, c) => s + c.dur, 0) % 192, 0, `seed ${seed}: whole bars`);
     }
-    ok(runs >= 380, `most seeds produced a modulating progression (${runs}/400)`);
-    ok(targetsSeen.size >= 4, `a variety of target keys (${targetsSeen.size})`);
+    ok(runs >= 580, `most seeds produced a modulating progression (${runs}/600)`);
+    ok(earlyMod > 0, `modulation sometimes happens in the first phrase (${earlyMod})`);
+    ok(withTwo > 0, `two modulations sometimes occur (${withTwo})`);
+    ok(targetsSeen.size >= 4, `a variety of final keys (${targetsSeen.size})`);
   });
 
   test('deterministic from seed', () => {

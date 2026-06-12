@@ -20,8 +20,9 @@
     return spans;
   }
 
-  // Map a tick to seconds, stretching fermata spans by FERMATA_MUL.
-  const FERMATA_MUL = 2;
+  // Map a tick to seconds, stretching fermata spans by FERMATA_MUL. A held
+  // chorale fermata reads clearly at 1.5x; a full 2x dragged too much.
+  const FERMATA_MUL = 1.5;
   function tickClock(excerpt, bpm, honorFermatas) {
     const secPerTick = 60 / bpm / 48;
     const spans = honorFermatas ? fermataSpans(excerpt) : [];

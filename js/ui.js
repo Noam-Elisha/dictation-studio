@@ -83,7 +83,7 @@
       for (let step = 0; step < 7; step++) {
         for (let alter = -1; alter <= 1; alter++) {
           const key = { tonic: { step, alter }, mode };
-          if (Math.abs(T.fifths(key)) > 6) continue;
+          if (Math.abs(T.fifths(key)) > 5) continue;
           const name = `${T.name(key.tonic)} ${mode}`;
           opts.push(name);
         }
@@ -101,13 +101,15 @@
     let opts;
     let isPhrases = false;
     if (source === 'generated' && mode === 'harmonic') {
-      opts = [[1, '1 phrase'], [2, '2 phrases'], [3, '3 phrases'], [4, '4 phrases']];
+      opts = [[1, '1'], [2, '2'], [3, '3'], [4, '4']];
       isPhrases = true;
     } else if (source === 'bach') {
       opts = [['short', '1 phrase'], ['medium', '2 phrases'], ['long', '3 phrases']];
     } else {
       opts = [['short', '2 bars'], ['medium', '4 bars'], ['long', '6 bars']];
     }
+    const label = $('#length-label');
+    if (label) label.textContent = isPhrases ? 'Length (phrases)' : 'Length';
     const current = isPhrases ? settings.harmonicPhrases : settings.length;
     seg.classList.toggle('seg-4', opts.length === 4);
     seg.innerHTML = opts

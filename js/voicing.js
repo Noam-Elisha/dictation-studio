@@ -211,6 +211,10 @@
         if (prevCtx.rPc != null && curPcSet.has(prevCtx.rPc)) {
           const outer = v === 0 || v === 3;
           if (move === 1) continue;
+          // an augmented sixth's raised 4th is not a true leading tone: it must
+          // rise a semitone to scale degree 5, so the frustrated-LT escape
+          // (inner voice falling to the fifth) does not apply here
+          if (prevCtx.spec.aug6) return `augmented-sixth #4 must rise in voice ${v}`;
           if (!outer && (move === -3 || move === -4) && curPc === prevCtx.rFifthPc) continue;
           return `leading tone not resolved in voice ${v}`;
         }
@@ -312,7 +316,12 @@
     if (counts.size === 2) cost += 1.2; // very thin sonority
     if (cand.midis[0] - cand.midis[1] > 9) cost += 0.4;
     if (cand.midis[1] - cand.midis[2] > 9) cost += 0.4;
-    for (let v = 0; v < 3; v++) if (cand.midis[v] === cand.midis[v + 1]) cost += 0.4;
+    // two voices on the exact same pitch (esp. S=A) is muddy — discourage it
+    for (let v = 0; v < 3; v++) if (cand.midis[v] === cand.midis[v + 1]) cost += 1.6;
+    // keep the soprano off the floor of its range so chromatic pre-dominants
+    // (♭VI, augmented sixths with their low ♭6 bass) don't drag the upper
+    // voices into a cramped, muddy register
+    if (cand.midis[0] < 64) cost += (64 - cand.midis[0]) * 0.25;
     return cost;
   }
 

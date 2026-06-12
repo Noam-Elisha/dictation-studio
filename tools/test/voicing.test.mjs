@@ -166,4 +166,36 @@ suite('voicing: harmonize', () => {
     // so a higher single-progression failure rate is expected and acceptable.
     ok(fails / total <= 0.16, `harmonize failure rate ${fails}/${total}`);
   });
+
+  test('augmented-sixth #4 always rises a semitone to scale degree 5', () => {
+    const AUG6 = new Set(['It6', 'Fr43', 'Ger65']);
+    let checked = 0;
+    for (const key of [C_MAJOR, A_MINOR]) {
+      for (let seed = 0; seed < 1500 && checked < 150; seed++) {
+        const rng = DS.rng.create(seed * 3 + (key === A_MINOR ? 1 : 0));
+        const chords = P.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+        const i = chords.findIndex((c) => AUG6.has(c.sym));
+        if (i < 0 || i + 1 >= chords.length) continue;
+        const block = V.harmonize(rng, key, chords);
+        if (!block) continue;
+        checked++;
+        const tone = chords[i].tones[chords[i].lt];
+        const sharp4 = ((T.midi({ ...T.degreeNote(key, tone[0], tone[1]), oct: 0 }) % 12) + 12) % 12;
+        for (let v = 0; v < 4; v++) {
+          if (((T.midi(block[i][v]) % 12) + 12) % 12 !== sharp4) continue;
+          eq(T.midi(block[i + 1][v]) - T.midi(block[i][v]), 1, `${key.mode} seed ${seed}: #4 rises`);
+        }
+      }
+    }
+    ok(checked >= 100, `exercised augmented sixths (${checked})`);
+  });
+
+  test('validator rejects an augmented sixth whose #4 falls to the fifth', () => {
+    const It6 = P.chordSpec('It6', 'major'); // Ab C F#, resolves to V
+    const Vc = P.chordSpec('V', 'major');
+    // F# (the raised 4th) sits in the alto and slips down to D instead of up to G
+    const voices = [chordOf('C5', 'F#4', 'C4', 'Ab2'), chordOf('B4', 'D4', 'G3', 'G2')];
+    const errs = V.validate(C_MAJOR, [It6, Vc], voices);
+    ok(errs.some((e) => /augmented-sixth/.test(e)), `expected a #4-rise violation, got: ${errs.join('; ')}`);
+  });
 });

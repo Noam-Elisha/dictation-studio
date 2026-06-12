@@ -29,7 +29,7 @@
 
   // Split one voice into measure token-strings. Returns {measures, counts}
   // where counts[i] = number of sounding tokens in measure i (for lyrics).
-  function measuresOf(notes, ctx) {
+  function measuresOf(notes, ctx, showFermata = true) {
     const measures = [];
     const counts = [];
     const noteTicks = []; // per-measure start ticks of each sounding token
@@ -57,7 +57,7 @@
         cur += ' ';
       }
       let tok = '';
-      if (n.fermata) tok += '!fermata!';
+      if (n.fermata && showFermata) tok += '!fermata!';
       if (n.step < 0) {
         tok += 'z';
       } else {
@@ -125,7 +125,9 @@
       'V:T clef=bass stem=up',
       'V:B clef=bass stem=down',
     ];
-    const per = excerpt.voices.map((v) => measuresOf(v, ctx));
+    // one fermata per staff: soprano (top of the treble staff) and tenor
+    // (top of the bass staff); alto/bass repeat the same held chord silently
+    const per = excerpt.voices.map((v, vi) => measuresOf(v, ctx, vi === 0 || vi === 2));
     const nMeasures = per[0].measures.length;
     const systems = [];
     for (let i = 0; i < nMeasures; i += barsPerSystem) systems.push([i, Math.min(i + barsPerSystem, nMeasures)]);

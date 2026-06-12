@@ -74,8 +74,8 @@
       const iv = T.bestIntervalForShift(key, s);
       const newKey = T.transposeKey(key, iv);
       const dF = T.fifths(newKey) - T.fifths(key);
-      if (Math.abs(T.fifths(newKey)) > 6) continue;
-      if (Math.abs(sig + dF) > 6) continue;
+      if (Math.abs(T.fifths(newKey)) > 5) continue;
+      if (Math.abs(sig + dF) > 5) continue;
       out.push({ s, iv });
     }
     return out;
@@ -189,7 +189,7 @@
     for (let step = 0; step < 7; step++) {
       for (let alter = -1; alter <= 1; alter++) {
         const key = { tonic: { step, alter }, mode };
-        if (Math.abs(T.fifths(key)) <= 6) tonics.push(key.tonic);
+        if (Math.abs(T.fifths(key)) <= 5) tonics.push(key.tonic);
       }
     }
     return { tonic: DS.rng.pick(rng, tonics), mode };

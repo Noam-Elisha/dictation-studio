@@ -44,7 +44,7 @@ suite('synth: event building (pure)', () => {
     close(events[1].t, 2);
   });
 
-  test('fermata stretch doubles the chord and shifts what follows, all voices', () => {
+  test('fermata stretch (1.5x) holds the chord and shifts what follows, all voices', () => {
     const ex = excerptOf([
       [N(2, 0, 5, 48, { fermata: true }), N(0, 0, 5, 48)],
       [N(4, 0, 4, 48, { fermata: true }), N(4, 0, 4, 48)],
@@ -54,8 +54,9 @@ suite('synth: event building (pure)', () => {
     const stretched = DS.synth.buildExcerptEvents(ex, { bpm: 60, honorFermatas: true });
     const plain = DS.synth.buildExcerptEvents(ex, { bpm: 60, honorFermatas: false });
     close(plain.totalSec, 2);
-    close(stretched.totalSec, 3);
-    const late = stretched.events.filter((e) => e.t > 1.5);
+    // a 48-tick fermata at 60bpm (1s) held 1.5x adds 0.5s -> total 2.5s
+    close(stretched.totalSec, 2.5);
+    const late = stretched.events.filter((e) => e.t > 1.4);
     eq(late.length, 4, 'second chord shifted in every voice');
   });
 

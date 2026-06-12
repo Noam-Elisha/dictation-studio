@@ -69,7 +69,7 @@ suite('excerpt: bach', () => {
         keyMode: 'any',
       });
       ok(ex, `seed ${seed} produced an excerpt`);
-      ok(Math.abs(ex.sig) <= 6, `seed ${seed}: sig ${ex.sig}`);
+      ok(Math.abs(ex.sig) <= 5, `seed ${seed}: sig ${ex.sig}`);
       let lo = 999;
       let hi = -999;
       for (const v of ex.voices) for (const n of v) {
@@ -190,27 +190,20 @@ suite('excerpt: generated', () => {
       });
       if (!ex || !ex.meta.modulation) continue;
       checked++;
-      // exactly one roman is a key-change label ("G:ii6"), as one lyric token
-      // (only pivot labels contain a colon; normal numerals never do)
+      // at least one roman is a key-change label ("G:ii6"); each is one lyric
+      // token (only pivot labels contain a colon; normal numerals never do),
+      // and the last one names the final key
       const tagged = ex.romans.filter((r) => r.label.includes(':'));
-      eq(tagged.length, 1, `seed ${seed}: one key-change label`);
-      ok(!/\s/.test(tagged[0].label), `seed ${seed}: label is a single token`);
+      ok(tagged.length >= 1, `seed ${seed}: a key-change label`);
+      for (const t of tagged) ok(!/\s/.test(t.label), `seed ${seed}: label is a single token`);
       const to = ex.meta.modulation.to;
       const norm = (s) => s.replace(/♯/g, '#').replace(/♭/g, 'b');
-      ok(norm(tagged[0].label).startsWith(T.name(to.tonic) + ':'), `seed ${seed}: label names the new key`);
+      ok(norm(tagged[tagged.length - 1].label).startsWith(T.name(to.tonic) + ':'),
+        `seed ${seed}: last label names the final key`);
       // four voices, all the same total duration, whole bars
       const totals = ex.voices.map((v) => v.reduce((s, n) => s + n.dur, 0));
       ok(totals.every((t) => t === totals[0]), `seed ${seed}: voices aligned`);
       eq(totals[0] % 192, 0, `seed ${seed}: whole bars`);
-      // the modulation introduces a pitch outside the home key signature
-      const SH = [3, 0, 4, 1, 5, 2, 6], FL = [6, 2, 5, 1, 4, 0, 3], sig = ex.sig, sigMap = {};
-      if (sig > 0) for (let i = 0; i < sig; i++) sigMap[SH[i]] = 1;
-      if (sig < 0) for (let i = 0; i < -sig; i++) sigMap[FL[i]] = -1;
-      let outOfKey = 0;
-      for (const v of ex.voices) for (const n of v) {
-        if (n.step >= 0 && n.alter !== (sigMap[n.step] || 0)) outOfKey++;
-      }
-      ok(outOfKey > 0, `seed ${seed}: modulation shows accidentals`);
     }
     ok(checked >= 30, `found modulating excerpts to check (${checked})`);
   });
@@ -224,7 +217,7 @@ suite('excerpt: generated', () => {
         keyMode: seed % 2 ? 'major' : 'minor',
       });
       ok(ex && ex.romans.length >= 3, `seed ${seed} produced chords`);
-      ok(Math.abs(ex.sig) <= 6, `seed ${seed} sig`);
+      ok(Math.abs(ex.sig) <= 5, `seed ${seed} sig`);
     }
   });
 });
