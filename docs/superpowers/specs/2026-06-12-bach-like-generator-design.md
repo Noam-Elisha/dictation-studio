@@ -119,26 +119,34 @@ A new internal function renders a circle-of-fifths fragment as a phrase body and
 
 #### 3. Harmonic expansion (prolongation) *(new)*
 
-Expand a single harmonic **function** over time with subordinate chords on weak beats — holding and
-deepening one function instead of progressing away from it. Where a sequence *moves* the harmony, a
+Expand a harmonic **function** over time with subordinate chords on weak beats — holding and deepening
+the current function instead of progressing away from it. Where a sequence *moves* the harmony, a
 prolongation *holds* it; alternating the two is how a chorale phrase breathes, and both add meaningful
 events (the direct fix for "too few chords").
 
-- **Expansion templates**, keyed by function (first and last chord keep the function):
-  - **Tonic (major):** `[I, IV, I]` and `[I, I6]` *(basic — D1)*; `[I, vii°6, I6]`, `[I, V6, I]`,
-    `[I, V43, I6]`, `[I6, V6, I]` *(passing/neighbour — D2+)*.
-  - **Tonic (minor):** the analogues with `i`, `iv`, `viio6`, `V6`.
-  - **Predominant:** `[ii, ii6]`, `[IV, ii6]`, `[IV, IV6]` *(D2+)*.
-  - **Dominant:** `[V, V7]`, `[V6, V65]` *(D3+)*; the cadential six-four `[I64c, V7]` already exists in
-    the cadence templates.
-- **Integration:** prolongation, the ordinary Markov walk, and sequences become the three "moves" a
-  reworked phrase-body builder composes to fill a phrase's beats, ending on a pre-cadential chord. A
-  prolongation/sequence emits several chords at once; the walk emits one. Inner (subordinate) chords land
-  on weak beats, framing chords on stronger beats. Inner chords obey the existing
+**This applies to every functional area, not just the tonic — and non-tonic expansion is the point.**
+Prolonging the **predominant** and the **dominant** matters as much as prolonging the tonic: Bach
+routinely spends two or three chords in the predominant area before a cadence, and expands the dominant
+before it resolves. The phrase-body builder prolongs whatever function it is currently on, drawing from
+templates keyed by function (first and last chord keep the function; inner chords are subordinate, on
+weak beats):
+
+- **Tonic (T):** `[I, vii°6, I6]`, `[I, V6, I]`, `[I, V43, I6]`, `[I6, V6, I]`, `[I, IV, I]` (neighbour),
+  `[I, I6]` (arpeggiation). Minor: analogues with `i`, `viio6`, `V6`, `iv`.
+- **Predominant (PD) — emphasised; the most common body expansion:** `[IV, ii6]`, `[ii, ii6]`,
+  `[IV, IV6, ii6]`, `[IV, ii65]`, `[ii6, ii65]`, `[IV, ii]`. Minor: `[iv, iio6]`, `[iv, iv6, iio6]`,
+  `[iv, iiø65]`.
+- **Dominant (D):** `[V, V7]`, `[V6, V65]`, and the cadential six-four `[I64c, V7]` (already in the
+  cadence templates). Lighter than the others — the dominant is usually the *goal* of the predominant,
+  not a place to dwell mid-phrase.
+
+- **Integration:** prolongation, the ordinary Markov walk, and sequences are the three "moves" a reworked
+  phrase-body builder composes to fill a phrase's beats, ending on a pre-cadential chord. A
+  prolongation/sequence emits several chords at once; the walk emits one. Inner chords obey the existing
   `tendencyCompatible` voice-leading check (they are standard chords, so they do).
-- **Grading:** basic tonic expansion from **D1** (fundamental, and needed to fill the now-longer phrases
-  without raising harmonic difficulty); passing/neighbour and predominant/dominant expansions phase in at
-  **D2–D3**, matching the colour-chord schedule.
+- **Grading:** prolongation enters at **D2** (gated off D1, which stays literally `I IV V vi` block
+  chords). Tonic, predominant, and dominant expansion all open at D2; chromatic inner chords (applied
+  chords *inside* an expansion) wait for **D3+**.
 
 #### 4. Cadence variety
 
@@ -211,8 +219,8 @@ not harmonic difficulty).
 
 | Level | Harmonic content | Rhythm & form |
 |---|---|---|
-| **D1** | `I, IV, V(7), vi`; simple cadences; basic tonic expansion (`I–IV–I`, `I–I6`). Plain. | quarter-note motion, fermata-cadences (no whole notes), flexible phrasing |
-| **D2** | + `vii°6` passing & expansions; more `vi`; more cadence variety (HC, deceptive). | ″ |
+| **D1** | `I, IV, V(7), vi`; simple cadences; **no expansion — plain block chords**. | quarter-note motion, fermata-cadences (no whole notes), flexible phrasing |
+| **D2** | + `vii°6` passing; more `vi`; more cadence variety (HC, deceptive); **harmonic expansion across tonic, predominant & dominant** (§3). | ″ |
 | **D3** | + `iii` & mediant motion; short root-position sequences; predominant/dominant expansion; applied dominants *(existing)*. | ″ |
 | **D4** | + longer/varied sequences; smooth-inversion & dominant-chain renderings; chromatic cadences *(existing)*. | ″ |
 | **D5** | *(= D4 grammar + `chromatic` flag.)* All renderings incl. long dominant chains; max NCT embellishment + modulation *(existing)*. | ″ (densest) |
