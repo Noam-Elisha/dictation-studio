@@ -27,6 +27,35 @@
   --font-music: 'Noto Music', serif;
 }
 
+/* Dark mode — the engraver's desk after hours: dark wood and lamplight, with
+   the score itself kept on a lit sheet of paper so the engraving stays crisp. */
+[data-theme="dark"] {
+  --paper: #1a1713;
+  --paper-deep: #13110d;
+  --card: #241f19;
+  --card-edge: #3a3327;
+  --ink: #efe6d3;
+  --ink-soft: #b3a78d;
+  --ink-faint: #80755c;
+  --line: #3b3327;
+  --oxblood: #cf6760;
+  --oxblood-deep: #e08c85;
+  --oxblood-soft: #3a221f;
+  --brass: #d0a85a;
+  --brass-soft: #463a23;
+  --ok: #82b079;
+  --close: #d6a652;
+  --missed: #dc7f60;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .grain { opacity: 0.22; }
+/* keep the engraved score on a light sheet even at night */
+[data-theme="dark"] #notation {
+  background: #f3ecdd;
+  border-radius: 8px;
+  padding: 10px 8px;
+}
+
 * { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }

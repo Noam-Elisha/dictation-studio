@@ -238,6 +238,8 @@
     const weighted = pool.map((c) => {
       let w = (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD);
       if (cadenceClass === 'open') w *= c.type === 'HC' || c.type === 'PHC' ? 3 : c.type === 'DC' ? 1.3 : 0.6;
+      // augmented sixths and the Neapolitan are striking — keep them a bit rarer
+      if (c.syms.some((s) => s === 'N6' || s === 'It6' || s === 'Fr43' || s === 'Ger65')) w *= 0.6;
       return [c, w];
     });
     const chosen = DS.rng.weighted(rng, weighted);
@@ -338,6 +340,7 @@
   }
 
   function generate(rng, { difficulty, mode, bars, length, cadenceClass }) {
+    difficulty = Math.min(4, Math.max(1, difficulty || 1)); // no harmony beyond D4
     const t = table(difficulty, mode);
     const tonic = mode === 'minor' ? 'i' : 'I';
     const durations = length ? legacyDurations(length) : buildRhythm(rng, bars || 3);

@@ -75,7 +75,7 @@ function voiceSubdivPerBeat(voices, total) {
 suite('nct: embellishment', () => {
   test('soak: no parallels, ranges kept, durations preserved (all difficulties, both modes)', () => {
     let embellishedVoices = 0;
-    for (let difficulty = 1; difficulty <= 4; difficulty++) {
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
       for (const key of [C_MAJOR, A_MINOR]) {
         for (let seed = 0; seed < 160; seed++) {
           const rng = DS.rng.create(seed * 11 + difficulty * 777 + (key === A_MINOR ? 1 : 0));
@@ -89,6 +89,7 @@ suite('nct: embellishment', () => {
             eq(voices[v].reduce((s, nt) => s + nt.dur, 0), tot, `${label}: voice ${v} duration`);
             for (let i = 0; i < voices[v].length; i++) {
               const m = T.midi(voices[v][i]);
+              ok(voices[v][i].dur > 0, `${label}: v${v} note ${i} has zero duration`);
               ok(m >= RANGES[v][0] && m <= RANGES[v][1], `${label}: v${v} note ${i} out of range (${m})`);
               if (i > 0) ok(!isAug(voices[v][i - 1], voices[v][i]), `${label}: v${v} aug step at ${i}`);
             }
@@ -103,7 +104,8 @@ suite('nct: embellishment', () => {
 
   test('no two consecutive dissonant sonorities (NCT clashes resolve)', () => {
     const pc = (m) => ((m % 12) + 12) % 12;
-    for (let difficulty = 2; difficulty <= 4; difficulty++) {
+    // includes difficulty 5 — its dense pass must still never stack two clashes
+    for (let difficulty = 2; difficulty <= 5; difficulty++) {
       for (let seed = 0; seed < 250; seed++) {
         const key = seed % 2 ? C_MAJOR : A_MINOR;
         const rng = DS.rng.create(seed * 7 + difficulty * 101);
@@ -156,10 +158,11 @@ suite('nct: embellishment', () => {
       }
       return sum / runs;
     }
-    const d = [1, 2, 3, 4].map(density);
+    const d = [1, 2, 3, 4, 5].map(density);
     ok(d[0] < d[1] && d[1] < d[2] && d[2] < d[3], `monotonic density: ${d.map((x) => x.toFixed(2))}`);
     ok(d[0] < 0.2, `d1 sparse (${d[0].toFixed(2)})`);
     ok(d[3] >= 0.4, `d4 rich but not saturated (${d[3].toFixed(2)})`);
+    ok(d[4] > d[3] * 1.5, `d5 far denser than d4 (${d[4].toFixed(2)} vs ${d[3].toFixed(2)})`);
   });
 
   test('anticipations are present and far outnumber escapes', () => {

@@ -54,14 +54,19 @@
   function buildDifficultySeg() {
     const seg = $('#difficulty-seg');
     const isBach = settings.source === 'bach';
+    // difficulty 5 (maximal embellishment) only applies to generated harmony
+    const maxGen = settings.mode === 'harmonic' ? 5 : 4;
     const opts = isBach
       ? [[1, 'Easy'], [2, 'Medium'], [3, 'Hard']]
-      : [[1, '1'], [2, '2'], [3, '3'], [4, '4']];
+      : Array.from({ length: maxGen }, (_, i) => [i + 1, String(i + 1)]);
     const titles = isBach
       ? { 1: 'mostly diatonic, simple rhythms', 2: 'some chromaticism', 3: 'chromatic, busy inner voices' }
-      : { 1: 'I IV V V7 vi', 2: '+ ii, inversions, cadential 6/4', 3: '+ secondary dominants, deceptive', 4: '+ mixture, Neapolitan, aug. sixth' };
-    const val = Math.min(settings.difficulty, isBach ? 3 : 4);
-    seg.classList.toggle('seg-4', !isBach);
+      : { 1: 'I IV V V7 vi', 2: '+ ii, inversions, cadential 6/4', 3: '+ secondary dominants, deceptive', 4: '+ mixture, Neapolitan, aug. sixth, modulation', 5: 'difficulty-4 harmony, maximally embellished with passing tones & suspensions' };
+    const max = isBach ? 3 : maxGen;
+    const val = Math.min(settings.difficulty, max);
+    settings.difficulty = val; // don't let a hidden difficulty leak into generation
+    seg.classList.toggle('seg-4', !isBach && maxGen === 4);
+    seg.classList.toggle('seg-5', !isBach && maxGen === 5);
     seg.innerHTML = opts
       .map(
         ([v, label]) =>
@@ -133,10 +138,19 @@
     // generated harmonic is always 4/4; everything else can filter by meter
     $('#row-meter').hidden = mode === 'harmonic' && source === 'generated';
     $('#row-transpose').hidden = source !== 'bach';
-    $('#row-pickup').hidden = !(mode === 'melodic' && source === 'generated');
     $('#row-voicesplayed').hidden = mode !== 'harmonic';
     $('#row-fermatas').hidden = source !== 'bach';
     $('#sel-fixedkey').hidden = settings.keyMode !== 'fixed';
+  }
+
+  function applyTheme(theme) {
+    const dark = theme === 'dark';
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    const btn = $('#btn-theme');
+    if (btn) {
+      btn.textContent = dark ? '☀' : '☾';
+      btn.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    }
   }
 
   function settingsToUI() {
@@ -153,7 +167,6 @@
     $('#sel-keymode').value = settings.keyMode;
     $('#sel-fixedkey').value = settings.fixedKey;
     $('#chk-transpose').checked = settings.transpose;
-    $('#chk-pickup').checked = settings.pickup;
     $('#chk-fermatas').checked = settings.honorFermatas;
     $('#chk-autoreveal').checked = settings.autoReveal;
     $('#rng-bpm').value = settings.bpm;
@@ -205,7 +218,6 @@
     $('#sel-keymode').addEventListener('change', (e) => { settings.keyMode = e.target.value; persist(); });
     $('#sel-fixedkey').addEventListener('change', (e) => { settings.fixedKey = e.target.value; persist(); });
     $('#chk-transpose').addEventListener('change', (e) => { settings.transpose = e.target.checked; persist(); });
-    $('#chk-pickup').addEventListener('change', (e) => { settings.pickup = e.target.checked; persist(); });
     $('#chk-fermatas').addEventListener('change', (e) => { settings.honorFermatas = e.target.checked; persist(); });
     $('#chk-autoreveal').addEventListener('change', (e) => { settings.autoReveal = e.target.checked; persist(); });
     $('#rng-bpm').addEventListener('input', (e) => {
@@ -480,18 +492,18 @@
       ${romansToggle}
       <div class="study-right"><span class="hero-sub" style="font-size:12px">replays follow your tempo setting</span></div>`;
 
+    const voiceLevels = () => current.studyVoices.map((on) => (on ? 1 : 0));
     $('#btn-replay').addEventListener('click', () => {
-      const voicesPlayed = current.studyVoices
-        .map((on, i) => (on ? i : -1))
-        .filter((i) => i >= 0);
-      if (!voicesPlayed.length) return banner('Unmute at least one voice.');
-      session.playReveal({ voicesPlayed });
+      if (!current.studyVoices.some(Boolean)) return banner('Unmute at least one voice.');
+      session.playReveal({ voiceLevels: voiceLevels() });
     });
     $$('.voice-pill').forEach((pill) =>
       pill.addEventListener('click', () => {
         const i = Number(pill.dataset.voice);
         current.studyVoices[i] = !current.studyVoices[i];
         pill.setAttribute('aria-pressed', String(current.studyVoices[i]));
+        // take effect immediately, even mid-replay
+        DS.synth.setVoiceLevel(i, current.studyVoices[i] ? 1 : 0);
       })
     );
     const chkRomans = $('#chk-romans');
@@ -725,6 +737,12 @@
       });
 
       $('#btn-about').addEventListener('click', () => $('#dlg-about').showModal());
+      applyTheme(settings.theme);
+      $('#btn-theme').addEventListener('click', () => {
+        settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+        applyTheme(settings.theme);
+        persist();
+      });
       $('#btn-clear-history').addEventListener('click', () => {
         DS.storage.clearHistory();
         renderHistory();

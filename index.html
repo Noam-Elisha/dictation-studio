@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%237a2e2b'/%3E%3Ctext x='32' y='44' font-size='36' text-anchor='middle' fill='%23f6f1e7' font-family='serif'%3E%E2%99%AB%3C/text%3E%3C/svg%3E">
+<script>try{if(JSON.parse(localStorage.getItem('ds.settings.v1')||'{}').theme==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
 </head>
 <body>
 <div class="grain" aria-hidden="true"></div>
@@ -20,6 +21,7 @@
     </div>
     <div class="masthead-side">
       <span id="stats-chip" class="stats-chip" title="graded exercises (got it · close · missed)"></span>
+      <button class="btn-text" id="btn-theme" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">☾</button>
       <button class="btn-text" id="btn-about" type="button">About</button>
     </div>
   </div>
@@ -93,11 +95,6 @@
       <label class="check" id="row-transpose">
         <input type="checkbox" id="chk-transpose">
         <span>Random transposition <small>defeats memorising the corpus</small></span>
-      </label>
-
-      <label class="check" id="row-pickup">
-        <input type="checkbox" id="chk-pickup">
-        <span>Allow upbeat <small>melody may start before the bar</small></span>
       </label>
     </section>
 

@@ -34,14 +34,18 @@ half cadence · 4 = mode mixture, Neapolitan 6, Italian/French/German augmented 
 **occasional modulation** to a closely related key — confirmed by a common-chord pivot (labelled
 in the answer, e.g. `G:ii6`) and a cadence in the new key. A modulation can arrive as early as the
 first phrase and the music then continues in the new key, sometimes modulating more than once;
-longer exercises modulate more often. Keys stay within five accidentals.
+longer exercises modulate more often. Keys stay within five accidentals. **5 = the difficulty-4
+harmony embellished as densely as the voice-leading allows** — a final pass packs in every passing
+tone and suspension that doesn't create a parallel or a second consecutive dissonance.
 
 Generated four-part writing uses a **quarter-note harmonic rhythm** (one chord per beat, like a
 real chorale) and is embellished with **non-chord tones** — passing tones, neighbor tones,
 anticipations, the occasional escape tone, and **suspensions and accented passing tones**
-(diatonic and chromatic). Density is calibrated to the Bach corpus (~0.9 of the four voices
-carry an eighth-note figure on a typical beat at the top difficulty) and scaled down for easier
-exercises; any voice, including the bass, may be embellished and multiple voices may move at once.
+(diatonic and chromatic). A figure matches the harmonic rhythm — an eighth note under a chord per
+beat, a quarter under a two-beat chord. Density is calibrated to the Bach corpus (~0.9 of the four
+voices carry a figure on a typical beat at difficulty 4) and scaled down for easier exercises or
+packed to the maximum at difficulty 5; any voice, including the bass, may be embellished and
+multiple voices may move at once.
 
 Every generated exercise passes a hard voice-leading validator (ranges, spacing, no
 parallel/hidden perfects, tendency-tone resolution, doubling rules). **Dissonances are
@@ -60,11 +64,13 @@ dissonant sonorities in a row. Soak-tested over thousands of seeds with zero vio
 - Givens shown like an exam: key, meter, length — first note(s) behind a "peek"
 - **Random transposition** of Bach excerpts (range-safe, properly respelled) so you can't memorize the corpus
 - Auto-reveal after a final writing gap, or reveal manually (`R`)
+- **Light or dark** theme (the engraver's desk by day or lamplight), remembered between visits
 
 ### After the reveal
 
-Engraved notation (abcjs), Roman numerals for generated harmonic exercises, per-voice
-mute/solo replay, source info (BWV + title + transposition, or seed), self-grading
+Engraved notation (abcjs), Roman numerals for generated harmonic exercises, **real-time per-voice
+mute/solo replay** (toggle S/A/T/B and hear it change mid-playback), source info (BWV + title +
+transposition, or seed), self-grading
 (Nailed it / Close / Missed), and a **practice log** with one-click **Redo** that rebuilds the
 exact same exercise. Settings, presets, history and stats persist in your browser.
 

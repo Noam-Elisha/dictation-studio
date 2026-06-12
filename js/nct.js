@@ -22,11 +22,16 @@
   ];
   const STEP_PC = [0, 2, 4, 5, 7, 9, 11];
   const E = 24; // eighth note
+  const Q = 48; // quarter note
+  // a figure decorating a 2-beat (half-note) chord is a quarter note, not an
+  // eighth — eighth-note motion is too quick under a slow harmonic rhythm
+  const figDur = (chordDur) => (chordDur >= 96 ? Q : E);
 
-  // per-voice, per-beat probability of attempting a figure, by difficulty
-  const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46 };
+  // per-voice, per-beat probability of attempting a figure, by difficulty.
+  // Difficulty 5 keeps the difficulty-4 harmony but embellishes maximally.
+  const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46, 5: 0.92 };
   // chance an attempted figure is an on-beat (suspension / accented passing) vs off-beat
-  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36 };
+  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36, 5: 0.42 };
 
   function ic(hi, lo) {
     return (((hi - lo) % 12) + 12) % 12;
@@ -120,16 +125,17 @@
       const offb = off[v].get(i); // figure at the END of chord i
       const nextSus = on[v].get(i + 1); // tied suspension starting next chord?
       const head = block[i][v];
+      const fig = figDur(chords[i].dur);
       let headDur = chords[i].dur;
       if (onb) {
-        out.push(note(onb.pitch, E, { tieEnd: !!onb.tie }));
-        headDur -= E;
+        out.push(note(onb.pitch, fig, { tieEnd: !!onb.tie }));
+        headDur -= fig;
       }
       // tie chord i's tail into a tied suspension on chord i+1 (same pitch)
       const tieTail = !offb && nextSus && nextSus.tie;
       if (offb) {
-        out.push(note(head, headDur - E));
-        out.push(note(offb, E));
+        out.push(note(head, headDur - fig));
+        out.push(note(offb, fig));
       } else {
         out.push(note(head, headDur, { tieStart: tieTail }));
       }
@@ -223,7 +229,9 @@
   // ---- assembly -------------------------------------------------------------
 
   function assemble(rng, key, chords, block, opts = {}) {
-    const difficulty = Math.min(4, Math.max(1, opts.difficulty || 1));
+    const difficulty = Math.min(5, Math.max(1, opts.difficulty || 1));
+    // difficulty 5 reuses the difficulty-4 figure vocabulary, just denser
+    const candDiff = Math.min(4, difficulty);
     const n = chords.length;
     const off = [new Map(), new Map(), new Map(), new Map()];
     const on = [new Map(), new Map(), new Map(), new Map()];
@@ -245,24 +253,35 @@
     };
     const skip = opts.skipChords || new Set(); // phrase-end chords stay clean (held)
 
+    // difficulty 5 sweeps several times and lets more voices move per chord, so
+    // it packs in as many figures as the validator allows (the held final
+    // chords still stay clean); everything else makes a single, sparser pass
+    const passes = difficulty >= 5 ? 4 : 1;
+    const decayBase = difficulty >= 5 ? 0.9 : 0.62;
+
+    for (let pass = 0; pass < passes; pass++)
     for (let i = 0; i < n - 1; i++) {
       if (chords[i].dur < 2 * E) continue;
       if (skip.has(i)) continue; // don't embellish out of a held phrase ending
       let placed = 0;
       for (const v of DS.rng.shuffle(rng, [0, 1, 2, 3])) {
-        if (rng() >= pBase * Math.pow(0.62, placed)) continue;
+        if (rng() >= pBase * Math.pow(decayBase, placed)) continue;
         const held = block[i].map((p) => T.midi(p));
         const p1 = block[i][v];
         const p2 = block[i + 1][v];
 
-        // choose off-beat vs on-beat; on-beat needs chord i+1 to have room
-        const wantOn = rng() < pOn && chords[i + 1].dur >= 2 * E && !on[v].has(i + 1) && !skip.has(i + 1);
+        // choose off-beat vs on-beat; on-beat needs chord i+1 to have room and
+        // to not already carry a figure (an off-beat there would collide on a
+        // later pass, leaving a zero-length head)
+        const wantOn =
+          rng() < pOn && chords[i + 1].dur >= 2 * E &&
+          !on[v].has(i + 1) && !off[v].has(i + 1) && !skip.has(i + 1);
         let chosen = null;
         let kind = 'off';
         if (wantOn) {
           // an on-beat figure sounds on chord i+1's downbeat, so spell it in
           // that chord's key (matters once a phrase has modulated)
-          const cands = onbeatCandidates(chords[i + 1].key || key, p1, p2, difficulty).filter((c) =>
+          const cands = onbeatCandidates(chords[i + 1].key || key, p1, p2, candDiff).filter((c) =>
             // check both the approach (p1->figure) and resolution (figure->p2)
             pitchOK(c.pitch, block[i + 1].map((p) => T.midi(p)), v, [p1, p2])
           );
@@ -272,12 +291,12 @@
           }
         }
         if (!chosen) {
-          // a quarter chord has room for only one figure; don't add an off-beat
-          // tail to a chord that already carries an on-beat figure
-          if (on[v].has(i)) continue;
+          // one figure per voice per chord — skip if this voice already carries
+          // an on- or off-beat figure here (the latter matters across passes)
+          if (on[v].has(i) || off[v].has(i)) continue;
           // an off-beat figure sounds within chord i's span, so spell it in
           // that chord's key (matters once a phrase has modulated)
-          let cands = offbeatCandidates(chords[i].key || key, p1, p2, difficulty).filter((c) =>
+          let cands = offbeatCandidates(chords[i].key || key, p1, p2, candDiff).filter((c) =>
             pitchOK(c.pitch, held, v, [p1, p2])
           );
           if (!cands.length) continue;
@@ -301,30 +320,37 @@
           kind = 'off';
         }
 
-        // tentatively place, validate the affected window, keep or revert
+        // tentatively place, validate, keep or revert. A single sparse pass only
+        // needs to re-check the locally affected window; difficulty 5 makes
+        // several dense passes whose figures can interact across those windows,
+        // so it validates the whole texture each time (that is exactly what
+        // "as many figures as stay clean" means).
+        const full = difficulty >= 5;
         if (kind === 'on') {
           on[v].set(i + 1, chosen);
-          const lo = starts[i + 1] - E;
-          const hi = Math.min(total, starts[i + 1] + chords[i + 1].dur + 1);
+          const lo = full ? 0 : starts[i + 1] - E;
+          const hi = full ? total : Math.min(total, starts[i + 1] + chords[i + 1].dur + 1);
           if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) placed++;
           else on[v].delete(i + 1);
         } else {
           off[v].set(i, chosen.pitch);
-          const lo = starts[i];
-          const hi = Math.min(total, starts[i] + chords[i].dur + chords[i + 1].dur + 1);
+          const lo = full ? 0 : starts[i];
+          const hi = full ? total : Math.min(total, starts[i] + chords[i].dur + chords[i + 1].dur + 1);
           if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) placed++;
           else off[v].delete(i);
         }
       }
     }
 
-    return deAlternate(buildAll(block, chords, off, on));
+    return deAlternate(buildAll(block, chords, off, on), diss, total);
   }
 
   // Safety net: collapse any voice that ends up oscillating between two notes
-  // in straight eighths (X Y X Y) by holding the second pair as a plain note —
-  // removing a neighbor only reduces dissonance, never adds a parallel.
-  function deAlternate(voices) {
+  // in straight eighths (X Y X Y) by holding the second pair as a plain note.
+  // Each collapse is checked against the whole texture and reverted if it would
+  // introduce a parallel or a clash (in a dense difficulty-5 texture, holding a
+  // note over its neighbor's slot can line up against another moving voice).
+  function deAlternate(voices, ctx, total) {
     for (const notes of voices) {
       const isE = (n) => n.dur === E && n.step >= 0 && !n.tieStart && !n.tieEnd;
       let i = 0;
@@ -335,8 +361,14 @@
           T.midi(notes[i + 1]) === T.midi(notes[i + 3]) &&
           T.midi(notes[i]) !== T.midi(notes[i + 1])
         ) {
-          notes[i + 2].dur += notes[i + 3].dur; // hold the second X, drop its neighbor
+          const removed = notes[i + 3];
+          notes[i + 2].dur += removed.dur; // hold the second X, drop its neighbor
           notes.splice(i + 3, 1);
+          if (ctx && !windowValid(voices, 0, total, ctx)) {
+            notes.splice(i + 3, 0, removed); // revert: keep the oscillation
+            notes[i + 2].dur -= removed.dur;
+            i++;
+          }
         } else {
           i++;
         }

@@ -201,10 +201,14 @@
 
     if (settings.mode === 'harmonic') {
       const phrases = Math.min(4, Math.max(1, settings.harmonicPhrases || 2));
-      // Difficulty 4 sometimes modulates to a closely related key — more often
+      const difficulty = settings.difficulty || 1;
+      // difficulty 5 keeps the difficulty-4 harmonic vocabulary (it just packs
+      // in far more non-chord tones), so cap the grammar at 4
+      const harmDiff = Math.min(4, difficulty);
+      // difficulty 4+ sometimes modulates to a closely related key — more often
       // on longer (multi-phrase) exercises, per the request.
-      const canModulate = (settings.difficulty || 1) >= 4 && phrases >= 2;
-      const modProb = { 2: 0.3, 3: 0.45, 4: 0.6 }[phrases] || 0;
+      const canModulate = difficulty >= 4 && phrases >= 2;
+      const modProb = { 2: 0.4, 3: 0.55, 4: 0.7 }[phrases] || 0;
       let chords = null;
       let voicesByChord = null;
       for (let attempt = 0; attempt < 12 && !voicesByChord; attempt++) {
@@ -212,13 +216,13 @@
         chords =
           (tryMod &&
             DS.progression.generateModulating(rng, {
-              difficulty: settings.difficulty || 1,
+              difficulty: harmDiff,
               mode: key.mode,
               phrases,
               key1: key,
             })) ||
           DS.progression.generatePhrases(rng, {
-            difficulty: settings.difficulty || 1,
+            difficulty: harmDiff,
             mode: key.mode,
             phrases,
           });
@@ -228,7 +232,7 @@
 
       const phraseEnds = new Set(chords.phraseEnds);
       const voices = DS.nct.assemble(rng, key, chords, voicesByChord, {
-        difficulty: settings.difficulty || 1,
+        difficulty, // full difficulty (5 embellishes maximally over D4 harmony)
         embellish: settings.embellish,
         skipChords: phraseEnds,
       });

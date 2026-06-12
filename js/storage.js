@@ -57,6 +57,7 @@
     showFirstNote: false,
     showRomans: true,
     voiceLevels: [1, 0.85, 0.85, 1],
+    theme: 'light', // light | dark
   };
 
   // Old builds stored voicesPlayed as a string; normalize to an index array.

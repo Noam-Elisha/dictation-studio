@@ -148,6 +148,8 @@
       session._player = DS.synth.createPlayer();
       session._phaseQueue = planPhases(settings);
       DS.synth.ensureContext();
+      // clear any per-voice muting left over from a previous study replay
+      for (let i = 0; i < 4; i++) DS.synth.setVoiceLevel(i, 1);
       nextPhase();
     };
 
@@ -182,15 +184,18 @@
       setState('revealed', { plays: session.playsDone, extras: session.extraPlays });
     };
 
-    // Post-reveal study playback (respects per-voice mute/solo via synth levels)
+    // Post-reveal study playback. Every voice is scheduled and muting is done
+    // by the live per-voice gains, so toggling S/A/T/B mid-replay is heard at
+    // once (see DS.synth.setVoiceLevel).
     session.playReveal = function (opts = {}) {
       const ex = session.excerpt;
       if (!ex) return;
       stopAudio();
+      const levels = opts.voiceLevels || [1, 1, 1, 1];
+      for (let i = 0; i < 4; i++) DS.synth.setVoiceLevel(i, levels[i]);
       const { events, totalSec } = DS.synth.buildExcerptEvents(ex, {
         bpm: opts.bpm || session.settings.bpm,
         honorFermatas: session.settings.honorFermatas,
-        voicesPlayed: opts.voicesPlayed,
       });
       session._player = session._player || DS.synth.createPlayer();
       setState('revealed', { replaying: true });
