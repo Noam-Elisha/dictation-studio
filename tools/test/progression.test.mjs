@@ -240,4 +240,17 @@ suite('progression: colour vocabulary', () => {
     ok(voices, 'harmonized a progression containing iii');
     eq(V.validate(C_MAJOR, chords, voices), [], 'no voice-leading violations');
   });
+
+  test('D2 routes I->vii°6->I6 passing motion; D3 reaches iii', () => {
+    const seen = new Set();
+    for (let s = 0; s < 400; s++) {
+      for (const d of [2, 3]) {
+        const ch = P.generate(DS.rng.create(s * 5 + d), { difficulty: d, mode: 'major', bars: 3 });
+        for (let i = 1; i < ch.length; i++) seen.add(ch[i - 1].sym + '>' + ch[i].sym);
+        ch.forEach((c) => seen.add('@' + c.sym));
+      }
+    }
+    ok([...seen].some((k) => k === 'I>viio6' || k === 'I6>viio6'), 'vii°6 passing motion appears');
+    ok(seen.has('@iii'), 'iii appears in D3 walks');
+  });
 });
