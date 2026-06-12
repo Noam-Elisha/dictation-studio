@@ -491,17 +491,10 @@
     let phase = 0; // the piece begins on a downbeat
 
     for (let p = 0; p < phrases - 1; p++) {
-      // Internal phrases run a 5–7 beat budget. The plan specs 5–9
-      // (`5 + rngInt(0..4)`), but the wider tail (8–9 chords/phrase) lengthens
-      // phrases enough to trip voicing.test.mjs's per-phrase soprano-leap
-      // budget ("phrase soprano lines sing", threshold unrec/phrase < 0.23) —
-      // that metric is a *count* per phrase, so it scales with phrase length
-      // even though the per-leap recovery rate is unchanged. 5–7 keeps that
-      // soak green while preserving pickup/length variety. (The final phrase
-      // below still uses the full 5–9 budget; it's a single phrase and the ±
-      // bar-close retry needs the spread.) Revisit once the soprano soak is
-      // length-normalised (it must rise anyway when D2+ prolongation lands).
-      const beatBudget = 5 + Math.floor(rng() * 3);
+      // Internal phrases run a 5–9 beat budget (5 + rngInt(0..4)) for phrase-
+      // length variety. The soprano-leap soak (voicing.test.mjs) is normalised
+      // per leap rather than per phrase, so longer phrases don't trip it.
+      const beatBudget = 5 + Math.floor(rng() * 5);
       const ph = buildPhrase(rng, {
         mode, difficulty, startPhase: phase, beatBudget,
         cadenceClass: 'open', chromatic, isFinal: false,

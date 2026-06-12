@@ -200,7 +200,7 @@ suite('voicing: harmonize', () => {
   });
 
   test('phrase soprano lines sing — leaps are recovered, never run the same way', () => {
-    let phrases = 0, unrec = 0, sameWay = 0;
+    let unrec = 0, sameWay = 0, leaps = 0;
     for (let difficulty = 2; difficulty <= 4; difficulty++) {
       for (let seed = 0; seed < 150; seed++) {
         const key = seed % 2 ? C_MAJOR : A_MINOR;
@@ -213,19 +213,22 @@ suite('voicing: harmonize', () => {
           const line = [];
           for (let i = start; i <= e; i++) line.push(T.midi(block[i][0]));
           start = e + 1;
-          phrases++;
           const iv = [];
           for (let i = 1; i < line.length; i++) iv.push(line[i] - line[i - 1]);
           for (let i = 0; i < iv.length; i++) {
             const a = iv[i], b = iv[i + 1];
             if (Math.abs(a) <= 2 || b == null) continue;
+            leaps++;
             if (!(Math.sign(b) === -Math.sign(a) && Math.abs(b) <= 2)) unrec++;
             if (Math.abs(b) > 2 && Math.sign(b) === Math.sign(a)) sameWay++;
           }
         }
       }
     }
-    ok(unrec / phrases < 0.23, `leaps are mostly recovered by a contrary step (${(unrec / phrases).toFixed(3)}/phrase)`);
-    ok(sameWay / phrases < 0.013, `no run of two same-direction leaps (${(sameWay / phrases).toFixed(3)}/phrase)`);
+    // Normalised per leap, not per phrase: flexible phrasing makes phrase
+    // length vary, and a per-phrase count scales with length even when the
+    // per-leap recovery rate holds steady (baseline ~0.335 unrec/leap).
+    ok(unrec / leaps < 0.40, `leaps are mostly recovered by a contrary step (${(unrec / leaps).toFixed(3)}/leap, n=${leaps})`);
+    ok(sameWay / leaps < 0.022, `no run of two same-direction leaps (${(sameWay / leaps).toFixed(4)}/leap)`);
   });
 });
