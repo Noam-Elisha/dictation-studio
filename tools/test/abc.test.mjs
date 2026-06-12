@@ -96,6 +96,28 @@ suite('abc: SATB + romans', () => {
     ok(abc.includes('w: I IV V7'), `romans lyrics:\n${abc}`);
   });
 
+  test('roman numerals align by tick; bass passing tone gets a skip syllable', () => {
+    const excerpt = {
+      kind: 'harmonic', source: 'test', key: C_MAJOR, sig: 0,
+      num: 4, den: 4, mlen: 192, upbeat: 0, tpq: 48,
+      voices: [
+        [N(2, 0, 4, 48), N(2, 0, 4, 48), N(1, 0, 4, 48), N(2, 0, 4, 48)], // S (one bar of quarters)
+        [N(0, 0, 4, 48), N(0, 0, 4, 48), N(0, 0, 4, 48), N(0, 0, 4, 48)], // A
+        [N(4, 0, 3, 48), N(4, 0, 3, 48), N(0, 0, 4, 48), N(4, 0, 3, 48)], // T
+        // Bass: C3 (I, split) D3 passing | E3 (I6) | G2 (V) | C3 (I) — D3@24 is the NCT
+        [N(0, 0, 3, 24), N(1, 0, 3, 24), N(2, 0, 3, 48), N(4, 0, 2, 48), N(0, 0, 3, 48)],
+      ],
+      romans: [
+        { label: 'I', tick: 0 }, { label: 'I6', tick: 48 },
+        { label: 'V', tick: 96 }, { label: 'I', tick: 144 },
+      ],
+      meta: {},
+    };
+    const abc = DS.abc.fromExcerpt(excerpt, { showRomans: true });
+    // 5 bass notes; the passing D3 (tick 24, not a chord onset) gets a '*'
+    ok(abc.includes('w: I * I6 V I'), `roman alignment wrong:\n${abc}`);
+  });
+
   test('romans hidden unless requested', () => {
     const excerpt = {
       kind: 'harmonic', source: 'test', key: C_MAJOR, sig: 0,

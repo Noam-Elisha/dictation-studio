@@ -45,15 +45,20 @@ suite('progression: grammar', () => {
     }
   });
 
-  test('lengths come out as requested and durations fill bars', () => {
-    for (const length of [5, 7, 9]) {
-      const rng = DS.rng.create(11 + length);
-      const chords = P.generate(rng, { difficulty: 2, mode: 'major', length });
-      eq(chords.length, length);
-      const total = chords.reduce((s, c) => s + c.dur, 0);
-      eq(total % 192, 0, 'fills whole 4/4 bars');
-      eq(chords[chords.length - 1].dur, 192, 'final chord is a whole note');
-      for (const c of chords.slice(0, -1)) eq(c.dur, 96);
+  test('quarter-note harmonic rhythm: bar-aligned, mostly quarters, held final', () => {
+    for (const bars of [2, 3, 4]) {
+      let quarters = 0, totalChords = 0;
+      for (let seed = 0; seed < 80; seed++) {
+        const chords = P.generate(DS.rng.create(seed * 3 + bars), { difficulty: 2, mode: 'major', bars });
+        const total = chords.reduce((s, c) => s + c.dur, 0);
+        eq(total, bars * 192, `bars=${bars} seed ${seed}: fills ${bars} whole bars`);
+        ok([96, 192].includes(chords[chords.length - 1].dur), `seed ${seed}: final held`);
+        for (const c of chords) ok([48, 96, 192].includes(c.dur), `seed ${seed}: valid dur ${c.dur}`);
+        quarters += chords.filter((c) => c.dur === 48).length;
+        totalChords += chords.length;
+      }
+      // across many phrases the rhythm is predominantly quarter notes
+      ok(quarters / totalChords >= 0.6, `bars=${bars}: mostly quarters on average (${(quarters / totalChords).toFixed(2)})`);
     }
   });
 

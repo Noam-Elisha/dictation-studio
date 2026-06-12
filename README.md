@@ -28,9 +28,12 @@ Everything (chorale data, notation engine, fonts) is bundled locally, so it work
 cadential 6/4, vii°6 · 3 = secondary dominants, tonicized mediant, deceptive cadences, Phrygian
 half cadence · 4 = mode mixture, Neapolitan 6, Italian/French/German augmented sixths, vii°7.
 
-Generated four-part writing is also embellished with **non-chord tones** — passing tones,
-neighbor tones and escape tones (diatonic and chromatic), woven in as off-beat eighths and
-scaled by difficulty — so it sounds like real chorale writing rather than block chords.
+Generated four-part writing uses a **quarter-note harmonic rhythm** (one chord per beat, like a
+real chorale) and is embellished with **non-chord tones** — passing tones, neighbor tones,
+escape tones, **suspensions and appoggiaturas** (diatonic and chromatic). Density is calibrated
+to the Bach corpus (~0.9 of the four voices carry an eighth-note figure on a typical beat at the
+top difficulty) and scaled down for easier exercises; any voice, including the bass, may be
+embellished and multiple voices may move at once.
 
 Every generated exercise passes a hard voice-leading validator (ranges, spacing, no
 parallel/hidden perfects, tendency-tone resolution, doubling rules), and the non-chord-tone

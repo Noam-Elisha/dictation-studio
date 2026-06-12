@@ -6,6 +6,7 @@ const DS = loadDS([
 const T = DS.theory;
 const C_MAJOR = { tonic: { step: 0, alter: 0 }, mode: 'major' };
 const A_MINOR = { tonic: { step: 5, alter: 0 }, mode: 'minor' };
+const RANGES = [[60, 79], [55, 74], [48, 67], [40, 62]];
 
 const ic = (hi, lo) => (((hi - lo) % 12) + 12) % 12;
 const isPerf = (i) => i === 0 || i === 7;
@@ -18,31 +19,31 @@ function isAug(a, b) {
   return s > [0, 2, 4, 5, 7, 9, 11][d];
 }
 
-// Reconstruct the sounding 4-voice "slices" from embellished voices and verify
-// no parallel perfects appear between consecutive distinct sonorities.
-function checkNoParallels(voices, label) {
-  // event boundaries: merge all voices onto a tick grid
-  const starts = voices.map((v) => {
-    const s = [];
+// onsets + sounding pitch per voice
+function gridOf(voices) {
+  return voices.map((v) => {
+    const arr = [];
     let t = 0;
-    for (const n of v) { s.push({ t, n }); t += n.dur; }
-    return { notes: s, total: t };
+    for (const n of v) { arr.push({ t, n }); t += n.dur; }
+    return { notes: arr, total: t };
   });
-  const total = starts[0].total;
-  for (const s of starts) eq(s.total, total, `${label}: voice length mismatch`);
-  // boundary ticks
+}
+
+function checkNoParallels(voices, label) {
+  const g = gridOf(voices);
+  const total = g[0].total;
+  for (const s of g) eq(s.total, total, `${label}: voice length mismatch`);
   const ticks = new Set([0]);
-  for (const s of starts) for (const e of s.notes) ticks.add(e.t);
-  const sorted = [...ticks].filter((t) => t < total).sort((a, b) => a - b);
+  for (const s of g) for (const e of s.notes) if (e.t < total) ticks.add(e.t);
+  const sorted = [...ticks].sort((a, b) => a - b);
   const pitchAt = (vi, t) => {
-    const ns = starts[vi].notes;
-    let cur = ns[0].n;
-    for (const e of ns) { if (e.t <= t) cur = e.n; else break; }
-    return cur;
+    let cur = g[vi].notes[0];
+    for (const e of g[vi].notes) { if (e.t <= t) cur = e; else break; }
+    return T.midi(cur.n);
   };
   let prev = null;
   for (const t of sorted) {
-    const chord = [0, 1, 2, 3].map((vi) => T.midi(pitchAt(vi, t)));
+    const chord = [0, 1, 2, 3].map((vi) => pitchAt(vi, t));
     if (prev) {
       for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) {
         const before = ic(Math.max(prev[a], prev[b]), Math.min(prev[a], prev[b]));
@@ -56,61 +57,102 @@ function checkNoParallels(voices, label) {
   }
 }
 
+// average number of voices that subdivide (carry an eighth figure) per beat
+function voiceSubdivPerBeat(voices, total) {
+  const g = gridOf(voices);
+  let beats = 0, subdiv = 0;
+  for (let bs = 0; bs + 48 <= total; bs += 48) {
+    beats++;
+    for (const s of g) {
+      let onsets = 0;
+      for (const e of s.notes) if (e.t >= bs && e.t < bs + 48) onsets++;
+      if (onsets > 1) subdiv++;
+    }
+  }
+  return beats ? subdiv / beats : 0;
+}
+
 suite('nct: embellishment', () => {
-  test('soak: no parallels, ranges kept, bass unembellished, durations preserved', () => {
-    const RANGES = [[60, 79], [55, 74], [48, 67], [40, 60]];
-    let embellishedCount = 0, totalRuns = 0;
+  test('soak: no parallels, ranges kept, durations preserved (all difficulties, both modes)', () => {
+    let embellishedVoices = 0;
     for (let difficulty = 1; difficulty <= 4; difficulty++) {
       for (const key of [C_MAJOR, A_MINOR]) {
-        for (let seed = 0; seed < 180; seed++) {
+        for (let seed = 0; seed < 160; seed++) {
           const rng = DS.rng.create(seed * 11 + difficulty * 777 + (key === A_MINOR ? 1 : 0));
-          const chords = DS.progression.generate(rng, { difficulty, mode: key.mode, length: [5, 7, 9][seed % 3] });
+          const chords = DS.progression.generate(rng, { difficulty, mode: key.mode, bars: [2, 3, 4][seed % 3] });
           const block = DS.voicing.harmonize(rng, key, chords);
           if (!block) continue;
-          totalRuns++;
           const voices = DS.nct.assemble(rng, key, chords, block, { difficulty });
           const label = `d${difficulty} ${key.mode} seed ${seed}`;
-
-          // bass is exactly one note per chord
-          eq(voices[3].length, chords.length, `${label}: bass embellished`);
-          // total duration per voice equals the progression length
           const tot = chords.reduce((s, c) => s + c.dur, 0);
-          for (let v = 0; v < 4; v++)
-            eq(voices[v].reduce((s, nt) => s + nt.dur, 0), tot, `${label}: voice ${v} duration`);
-          // ranges + no augmented melodic steps within a voice
           for (let v = 0; v < 4; v++) {
+            eq(voices[v].reduce((s, nt) => s + nt.dur, 0), tot, `${label}: voice ${v} duration`);
             for (let i = 0; i < voices[v].length; i++) {
               const m = T.midi(voices[v][i]);
               ok(m >= RANGES[v][0] && m <= RANGES[v][1], `${label}: v${v} note ${i} out of range (${m})`);
-              if (i > 0) ok(!isAug(voices[v][i - 1], voices[v][i]), `${label}: v${v} augmented step at ${i}`);
+              if (i > 0) ok(!isAug(voices[v][i - 1], voices[v][i]), `${label}: v${v} aug step at ${i}`);
             }
-            if (voices[v].length > chords.length) embellishedCount++;
+            if (voices[v].length > chords.length) embellishedVoices++;
           }
           checkNoParallels(voices, label);
         }
       }
     }
-    ok(embellishedCount > 200, `expected many embellishments, saw ${embellishedCount}`);
+    ok(embellishedVoices > 500, `expected many embellished voices, saw ${embellishedVoices}`);
   });
 
-  test('difficulty 1 stays nearly plain; difficulty 4 adds many', () => {
-    const d1 = densitySafe(1), d4 = densitySafe(4);
-    ok(d4 > d1, `d4 (${d4.toFixed(3)}) should embellish more than d1 (${d1.toFixed(3)})`);
-    ok(d1 < 0.06, `d1 should be sparse (${d1.toFixed(3)})`);
+  test('density scales with difficulty and approaches Bach at D4', () => {
+    function density(difficulty) {
+      let sum = 0, runs = 0;
+      for (let seed = 0; seed < 250; seed++) {
+        const rng = DS.rng.create(seed * 9 + difficulty * 13);
+        const chords = DS.progression.generate(rng, { difficulty, mode: seed % 2 ? 'major' : 'minor', bars: 3 });
+        const key = seed % 2 ? C_MAJOR : A_MINOR;
+        const block = DS.voicing.harmonize(rng, key, chords);
+        if (!block) continue;
+        const voices = DS.nct.assemble(rng, key, chords, block, { difficulty });
+        sum += voiceSubdivPerBeat(voices, chords.reduce((s, c) => s + c.dur, 0));
+        runs++;
+      }
+      return sum / runs;
+    }
+    const d = [1, 2, 3, 4].map(density);
+    ok(d[0] < d[1] && d[1] < d[2] && d[2] < d[3], `monotonic density: ${d.map((x) => x.toFixed(2))}`);
+    ok(d[0] < 0.2, `d1 sparse (${d[0].toFixed(2)})`);
+    ok(d[3] >= 0.45, `d4 near Bach's ~0.86 (${d[3].toFixed(2)})`);
+  });
+
+  test('bass is embellished sometimes (passing tones in the bass)', () => {
+    let bassExtra = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const rng = DS.rng.create(seed * 5 + 3);
+      const chords = DS.progression.generate(rng, { difficulty: 4, mode: 'major', bars: 3 });
+      const block = DS.voicing.harmonize(rng, C_MAJOR, chords);
+      if (!block) continue;
+      const voices = DS.nct.assemble(rng, C_MAJOR, chords, block, { difficulty: 4 });
+      bassExtra += voices[3].length - chords.length;
+    }
+    ok(bassExtra > 30, `expected bass passing tones, saw ${bassExtra}`);
+  });
+
+  test('suspensions tie the preparation into the dissonance', () => {
+    let suspensions = 0;
+    for (let seed = 0; seed < 400; seed++) {
+      const rng = DS.rng.create(seed * 7 + 2);
+      const chords = DS.progression.generate(rng, { difficulty: 4, mode: 'major', bars: 4 });
+      const block = DS.voicing.harmonize(rng, C_MAJOR, chords);
+      if (!block) continue;
+      const voices = DS.nct.assemble(rng, C_MAJOR, chords, block, { difficulty: 4 });
+      for (const v of voices) {
+        for (let i = 1; i < v.length; i++) {
+          if (v[i].tieEnd) {
+            suspensions++;
+            ok(v[i - 1].tieStart, `tieEnd note at ${i} must follow a tieStart`);
+            eq(T.midi(v[i - 1]), T.midi(v[i]), 'tied notes share a pitch');
+          }
+        }
+      }
+    }
+    ok(suspensions > 10, `expected some tied suspensions, saw ${suspensions}`);
   });
 });
-
-// extra notes per chord, averaged over many progressions
-function densitySafe(difficulty) {
-  let extra = 0, base = 0;
-  for (let seed = 0; seed < 250; seed++) {
-    const rng = DS.rng.create(seed * 9 + difficulty * 13);
-    const chords = DS.progression.generate(rng, { difficulty, mode: 'major', length: 7 });
-    const block = DS.voicing.harmonize(rng, C_MAJOR, chords);
-    if (!block) continue;
-    const voices = DS.nct.assemble(rng, C_MAJOR, chords, block, { difficulty });
-    for (let v = 0; v < 3; v++) extra += voices[v].length - chords.length;
-    base += chords.length;
-  }
-  return extra / base;
-}

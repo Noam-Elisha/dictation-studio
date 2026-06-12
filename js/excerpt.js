@@ -8,7 +8,7 @@
   const T = DS.theory;
 
   const PHRASES_OF_LENGTH = { short: 1, medium: 2, long: 3 };
-  const CHORDS_OF_LENGTH = { short: 5, medium: 7, long: 9 };
+  const HARMONIC_BARS = { short: 2, medium: 3, long: 4 };
   const BARS_OF_LENGTH = { short: 2, medium: 4, long: 6 };
 
   function decode([step, alter, oct, dur, flags]) {
@@ -200,14 +200,14 @@
     const sig = T.fifths(key);
 
     if (settings.mode === 'harmonic') {
-      const length = CHORDS_OF_LENGTH[settings.length || 'medium'] || 7;
+      const bars = HARMONIC_BARS[settings.length || 'medium'] || 3;
       let chords = null;
       let voicesByChord = null;
       for (let attempt = 0; attempt < 10 && !voicesByChord; attempt++) {
         chords = DS.progression.generate(rng, {
           difficulty: settings.difficulty || 1,
           mode: key.mode,
-          length,
+          bars,
         });
         voicesByChord = DS.voicing.harmonize(rng, key, chords);
       }

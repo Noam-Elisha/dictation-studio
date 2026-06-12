@@ -32,8 +32,10 @@
   function measuresOf(notes, ctx) {
     const measures = [];
     const counts = [];
+    const noteTicks = []; // per-measure start ticks of each sounding token
     let cur = '';
     let count = 0;
+    let curTicks = [];
     let tick = 0;
     let nextBar = ctx.upbeat || ctx.mlen;
     let acc = new Map();
@@ -43,8 +45,10 @@
       if (tick === nextBar) {
         measures.push(cur);
         counts.push(count);
+        noteTicks.push(curTicks);
         cur = '';
         count = 0;
+        curTicks = [];
         nextBar += ctx.mlen;
         acc = new Map();
       } else if (tick > nextBar) {
@@ -69,12 +73,14 @@
       if (units !== 1) tok += units;
       if (n.tieStart) tok += '-';
       cur += tok;
+      curTicks.push({ tick, rest: n.step < 0 });
       count++;
       tick += n.dur;
     }
     measures.push(cur);
     counts.push(count);
-    return { measures, counts };
+    noteTicks.push(curTicks);
+    return { measures, counts, noteTicks };
   }
 
   function systemsOf(measures, barsPerSystem) {
@@ -125,16 +131,19 @@
     for (let i = 0; i < nMeasures; i += barsPerSystem) systems.push([i, Math.min(i + barsPerSystem, nMeasures)]);
 
     const showRomans = opts.showRomans !== false && excerpt.romans && excerpt.romans.length;
-    let romanIdx = 0;
+    // Roman numerals sit under the bass aligned by tick: a bass note that
+    // begins a chord gets its label, a bass passing tone gets a skip syllable.
+    const romanByTick = new Map((excerpt.romans || []).map((r) => [r.tick, r.label]));
     const lines = [];
     systems.forEach(([a, b], si) => {
       const isLast = si === systems.length - 1;
       names.forEach((name, vi) => {
         lines.push(`[V:${name}] ` + joinSystem(per[vi].measures.slice(a, b), isLast));
         if (name === 'B' && showRomans) {
-          const nBass = per[3].counts.slice(a, b).reduce((s, c) => s + c, 0);
-          const labels = excerpt.romans.slice(romanIdx, romanIdx + nBass).map((r) => r.label);
-          romanIdx += nBass;
+          const labels = [];
+          for (let m = a; m < b; m++)
+            for (const t of per[3].noteTicks[m])
+              labels.push(t.rest ? '' : romanByTick.has(t.tick) ? romanByTick.get(t.tick) : '*');
           lines.push('w: ' + labels.join(' '));
         }
       });

@@ -299,37 +299,61 @@
     return null;
   }
 
-  function generate(rng, { difficulty, mode, length }) {
+  // Harmonic rhythm: one chord per beat (quarter note) for the body, with the
+  // occasional half note, and a held (half/whole) final chord. Bar-aligned in
+  // 4/4 so phrases land cleanly. The chord count follows from the rhythm.
+  const BODY_BARS = [
+    [[48, 48, 48, 48], 6.5],
+    [[96, 48, 48], 1], [[48, 48, 96], 1], [[48, 96, 48], 0.7],
+    [[96, 96], 0.4],
+  ];
+  const FINAL_BARS = [
+    [[48, 48, 96], 4.5], // two quarters then a half-note cadence chord on beat 3
+    [[96, 96], 1.5],
+    [[192], 1.2], // whole-bar final
+  ];
+
+  function buildRhythm(rng, bars) {
+    const durs = [];
+    for (let b = 0; b < bars - 1; b++) durs.push(...DS.rng.weighted(rng, BODY_BARS));
+    durs.push(...DS.rng.weighted(rng, FINAL_BARS));
+    return durs;
+  }
+
+  function legacyDurations(length) {
+    // count-based fallback used by some tests: all quarters, whole-note final
+    const durs = [];
+    for (let i = 0; i < length - 1; i++) durs.push(48);
+    durs.push(192);
+    return durs;
+  }
+
+  function generate(rng, { difficulty, mode, bars, length }) {
     const t = table(difficulty, mode);
     const tonic = mode === 'minor' ? 'i' : 'I';
+    const durations = length ? legacyDurations(length) : buildRhythm(rng, bars || 3);
+    const M = durations.length;
     for (let attempt = 0; attempt < 40; attempt++) {
-      const cadence = pickCadence(rng, difficulty, mode, length - 1);
-      const bodyLen = length - cadence.syms.length;
+      const cadence = pickCadence(rng, difficulty, mode, M - 1);
+      const bodyLen = M - cadence.syms.length;
       if (bodyLen < 1) continue;
       const body = walkBody(rng, t, tonic, bodyLen, cadence.syms[0], mode);
       if (!body) continue;
       const syms = body.concat(cadence.syms);
-      const chords = syms.map((sym, i) => ({
-        ...clone(CAT[mode][sym]),
-        sym,
-        dur: i === syms.length - 1 ? 192 : 96,
-      }));
+      const chords = syms.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durations[i] }));
       const last = chords[chords.length - 1];
       if (cadence.type === 'PAC') last.sopranoEnd = [1];
       if (cadence.type === 'IAC') last.sopranoEnd = [3, 5];
       chords.cadence = cadence.type;
       return chords;
     }
-    // fallback: guaranteed simple authentic phrase
+    // fallback: guaranteed simple authentic phrase over the same rhythm
     const base = mode === 'minor' ? ['i', 'iv', 'V7', 'i'] : ['I', 'IV', 'V7', 'I'];
     const syms = [tonic];
-    while (syms.length < length - 3) syms.push(syms.length % 2 ? base[1] : tonic);
-    const all = syms.concat(base.slice(1));
-    const chords = all.slice(0, length).map((sym, i) => ({
-      ...clone(CAT[mode][sym]),
-      sym,
-      dur: i === length - 1 ? 192 : 96,
-    }));
+    while (syms.length < M - 3) syms.push(syms.length % 2 ? base[1] : tonic);
+    const all = syms.concat(base.slice(1)).slice(0, M);
+    while (all.length < M) all.splice(all.length - 1, 0, tonic);
+    const chords = all.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durations[i] }));
     chords[chords.length - 1].sopranoEnd = [1];
     chords.cadence = 'PAC';
     return chords;

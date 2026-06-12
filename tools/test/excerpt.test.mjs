@@ -109,7 +109,7 @@ suite('excerpt: generated', () => {
     eq(ex.romans[0].tick, 0);
     const total = ex.voices[0].reduce((s, n) => s + n.dur, 0);
     eq(total % ex.mlen, 0);
-    eq(ex.voices[0][ex.voices[0].length - 1].dur, 192);
+    ok([96, 192].includes(ex.voices[0][ex.voices[0].length - 1].dur), 'final chord held (half or whole)');
     ok(ex.meta.seedUsed !== undefined, 'records seed');
   });
 
@@ -145,7 +145,7 @@ suite('excerpt: generated', () => {
         length: ['short', 'medium', 'long'][seed % 3],
         keyMode: seed % 2 ? 'major' : 'minor',
       });
-      ok(ex && ex.voices[0].length >= 5, `seed ${seed} produced chords`);
+      ok(ex && ex.romans.length >= 3, `seed ${seed} produced chords`);
       ok(Math.abs(ex.sig) <= 6, `seed ${seed} sig`);
     }
   });

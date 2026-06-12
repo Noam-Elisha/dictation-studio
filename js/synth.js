@@ -197,7 +197,9 @@
     voiceGains[voice].gain.value = level;
   }
 
-  // Sampled piano: nearest anchor, pitch-shifted, with a damper-like release.
+  // Sampled piano: nearest anchor, pitch-shifted. Notes ring well past their
+  // nominal end so consecutive notes overlap — a connected, lightly-pedalled
+  // legato rather than a damped break between every note.
   function pianoVoice(dest, midi, t, dur, vel, sources) {
     if (!pianoBank || !pianoBank.length) return synthVoice(dest, midi, t, dur, vel);
     let best = pianoBank[0];
@@ -207,16 +209,21 @@
     src.buffer = best.buffer;
     src.playbackRate.value = Math.pow(2, (midi - best.midi) / 12);
     const g = ctx.createGain();
-    const peak = vel * 0.6;
-    g.gain.setValueAtTime(peak, t); // sample carries its own attack
+    const peak = vel * 0.5;
+    // brief ramp avoids a click; the sample supplies the hammer attack
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.006);
     const tEnd = t + Math.max(0.12, dur);
-    g.gain.setTargetAtTime(0.0001, tEnd, 0.14); // damper
+    // hold near full through the note, then a slow release that overlaps the
+    // next note (no silence in between) before the string finally damps
+    g.gain.setValueAtTime(peak, tEnd);
+    g.gain.setTargetAtTime(0.0001, tEnd + 0.12, 0.32);
     src.connect(g);
     g.connect(dest);
     src.start(t);
-    src.stop(tEnd + 0.7);
+    src.stop(tEnd + 1.3);
     if (sources) sources.push(src);
-    return tEnd + 0.7;
+    return tEnd + 1.3;
   }
 
   function synthVoice(dest, midi, t, dur, vel) {
