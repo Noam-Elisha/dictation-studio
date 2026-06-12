@@ -390,6 +390,88 @@
     return chords;
   }
 
+  // ---- single-phrase, beat-stream rhythm ----------------------------------
+  // A seam over walkBody so later tasks can splice in prolongation / sequence
+  // renderings of the body without touching buildPhrase. For now it is a thin
+  // wrapper: a plain weighted walk from the tonic to a chord that can precede
+  // the cadence head.
+  function composeBody(rng, t, len, cadenceHead, mode, difficulty, chromatic) {
+    return walkBody(rng, t, mode === 'minor' ? 'i' : 'I', len, cadenceHead, mode, chromatic);
+  }
+
+  const TPQ = 48, BAR = 192;
+  const onStrong = (tick) => tick % BAR === 0 || tick % BAR === 96;
+
+  // Lay `n` chords as quarter notes from `startPhase`; the last chord is the
+  // cadence (its dur is `finalDur`, with a fermata). If the cadence would land
+  // on a weak beat, lengthen exactly one earlier chord that *starts on a strong
+  // beat* from a quarter to a half — a single +48 shift always moves a weak
+  // landing onto a strong one, and a half that starts on a strong beat stays
+  // within its bar, so no note crosses a barline. Returns the dur array.
+  function assignBeatStream(n, startPhase, finalDur) {
+    const durs = new Array(n).fill(TPQ);
+    durs[n - 1] = finalDur;
+    const finalStart = startPhase + TPQ * (n - 1);
+    if (!onStrong(finalStart)) {
+      // find the first non-final chord that begins on a strong beat; the chord
+      // just before the cadence always qualifies, so this never fails for n>=2.
+      for (let i = 0; i < n - 1; i++) {
+        if (onStrong(startPhase + TPQ * i)) { durs[i] = 2 * TPQ; break; }
+      }
+    }
+    return durs;
+  }
+
+  // Build one self-contained phrase as a beat-stream of quarters (with one
+  // possible half to align the cadence) ending in a fermata-bearing cadence
+  // chord. `beatBudget` is the rough chord count; `cadenceClass` steers the
+  // cadence ('authentic' for a final phrase, 'open' for an internal one).
+  // `isFinal` makes the closing chord a half note (the piece's last sound);
+  // otherwise it is a quarter so the next phrase picks up on the next beat.
+  function buildPhrase(rng, { mode, difficulty, startPhase, beatBudget, cadenceClass, chromatic, isFinal }) {
+    difficulty = Math.min(4, Math.max(1, difficulty || 1));
+    const t = table(difficulty, mode);
+    const tonic = mode === 'minor' ? 'i' : 'I';
+    // a phrase needs at least one body chord plus the shortest cadence (2 chords)
+    const budget = Math.max(3, beatBudget | 0);
+    startPhase = ((startPhase | 0) % BAR + BAR) % BAR;
+    const finalDur = isFinal ? 2 * TPQ : TPQ;
+
+    for (let attempt = 0; attempt < 40; attempt++) {
+      // cap the cadence so at least one body chord remains, but never below the
+      // shortest cadence (2 chords) — pickCadence has no 1-chord cadence
+      const maxCad = Math.max(2, budget - 1);
+      const cadence = pickCadence(rng, difficulty, mode, maxCad, cadenceClass, chromatic);
+      const bodyLen = budget - cadence.syms.length;
+      if (bodyLen < 1) continue;
+      const body = composeBody(rng, t, bodyLen, cadence.syms[0], mode, difficulty, chromatic);
+      if (!body) continue;
+      const syms = body.concat(cadence.syms);
+      const durs = assignBeatStream(syms.length, startPhase, finalDur);
+      const chords = syms.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
+      const last = chords[chords.length - 1];
+      last.fermata = true;
+      if (cadence.type === 'PAC') last.sopranoEnd = [1];
+      if (cadence.type === 'IAC') last.sopranoEnd = [3, 5];
+      chords.cadence = cadence.type;
+      return chords;
+    }
+
+    // fallback: guaranteed authentic phrase over the same budget
+    const base = mode === 'minor' ? ['i', 'iv', 'V7', 'i'] : ['I', 'IV', 'V7', 'I'];
+    const syms = [tonic];
+    while (syms.length < budget - 3) syms.push(syms.length % 2 ? base[1] : tonic);
+    const all = syms.concat(base.slice(1)).slice(0, budget);
+    while (all.length < budget) all.splice(all.length - 1, 0, tonic);
+    const durs = assignBeatStream(all.length, startPhase, finalDur);
+    const chords = all.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
+    const last = chords[chords.length - 1];
+    last.fermata = true;
+    last.sopranoEnd = [1];
+    chords.cadence = 'PAC';
+    return chords;
+  }
+
   // A multi-phrase progression: `phrases` two-bar phrases concatenated, each
   // ending in a cadence (internal phrases favor half cadences, the last is
   // authentic). Returns one flat chord array with `.phraseEnds` = the chord
@@ -578,5 +660,8 @@
     return { ...clone(spec), sym };
   }
 
-  DS.progression = { generate, generatePhrases, generateModulating, closelyRelated, chordSpec, display };
+  DS.progression = {
+    generate, generatePhrases, generateModulating, closelyRelated, chordSpec, display,
+    _composeBody: composeBody, _buildPhrase: buildPhrase,
+  };
 })();

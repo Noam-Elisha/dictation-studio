@@ -8,6 +8,20 @@ const V = DS.voicing;
 const D1_MAJOR = new Set(['I', 'I6', 'IV', 'V', 'V7', 'vi', 'I64c']);
 const D1_MINOR = new Set(['i', 'i6', 'iv', 'V', 'V7', 'VI', 'i64c']);
 
+// Beat-stream rhythm helpers (shared by the rhythm-invariant suites). Both take
+// an optional starting `phase` (the tick the first chord begins on).
+const TPQ = 48, BAR = 192;
+const strongBeat = (tick) => tick % BAR === 0 || tick % BAR === 96;
+function crossesBarline(chords, phase = 0) {
+  let t = phase;
+  for (const c of chords) {
+    if (Math.floor((t + c.dur - 1) / BAR) !== Math.floor(t / BAR)) return true;
+    t += c.dur;
+  }
+  return false;
+}
+function startTicks(chords, phase = 0) { const out = []; let t = phase; for (const c of chords) { out.push(t); t += c.dur; } return out; }
+
 const AUTH_FINAL = new Set(['I', 'i']);
 const DOM = new Set(['V', 'V7', 'V6', 'V65']);
 const DECEPTIVE = new Set(['vi', 'VI']);
@@ -264,5 +278,25 @@ suite('progression: colour vocabulary', () => {
     }
     ok([...seen].some((k) => k === 'I>viio6' || k === 'I6>viio6'), 'vii°6 passing motion appears');
     ok(seen.has('@iii'), 'iii appears in D3 walks');
+  });
+});
+
+suite('progression: rhythm invariants', () => {
+  test('buildPhrase emits a fermata beat-stream — no whole notes, no barline crossings, cadence on a strong beat', () => {
+    for (let s = 0; s < 600; s++) {
+      const d = 1 + (s % 4);
+      const phase = [0, 48, 96, 144][s % 4];
+      const ph = P._buildPhrase(DS.rng.create(s * 9 + d), {
+        mode: s % 2 ? 'major' : 'minor', difficulty: d, startPhase: phase,
+        beatBudget: 6 + (s % 6), cadenceClass: s % 3 ? 'open' : 'authentic', chromatic: false, isFinal: s % 5 === 0,
+      });
+      ok(ph.every((c) => c.dur !== 192), 'no whole notes');
+      ok(ph.every((c) => c.dur === 48 || c.dur === 96), 'only quarters and halves');
+      ok(!crossesBarline(ph, phase), 'no note crosses a barline');
+      const st = startTicks(ph, phase);
+      ph.forEach((c, i) => { if (c.dur === 96) ok(strongBeat(st[i]), `half at tick ${st[i]} on a strong beat`); });
+      ok(strongBeat(st[st.length - 1]), 'cadence on a strong beat');
+      ok(ph[ph.length - 1].fermata === true, 'cadence carries a fermata');
+    }
   });
 });
