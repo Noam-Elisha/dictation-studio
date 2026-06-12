@@ -133,12 +133,10 @@
   }
 
   function applyVisibility() {
-    const { mode, source } = settings;
-    $('#row-melodicvoice').hidden = !(mode === 'melodic' && source === 'bach');
-    // generated harmonic is always 4/4; everything else can filter by meter
-    $('#row-meter').hidden = mode === 'harmonic' && source === 'generated';
+    const { source } = settings;
+    // generated harmonic is always 4/4; Bach can still filter by meter
+    $('#row-meter').hidden = source === 'generated';
     $('#row-transpose').hidden = source !== 'bach';
-    $('#row-voicesplayed').hidden = mode !== 'harmonic';
     $('#row-fermatas').hidden = source !== 'bach';
     $('#sel-fixedkey').hidden = settings.keyMode !== 'fixed';
   }
@@ -154,9 +152,7 @@
   }
 
   function settingsToUI() {
-    radioSet('mode', settings.mode);
     radioSet('source', settings.source);
-    radioSet('melodicVoice', settings.melodicVoice);
     radioSet('meter', settings.meter);
     radioSet('establish', settings.establish);
     radioSet('countIn', settings.countIn);
@@ -185,11 +181,11 @@
   }
 
   function wireSettings() {
-    for (const name of ['mode', 'source', 'melodicVoice', 'meter', 'establish', 'countIn']) {
+    for (const name of ['source', 'meter', 'establish', 'countIn']) {
       $$(`input[name="${name}"]`).forEach((el) =>
         el.addEventListener('change', () => {
           settings[name] = radioGet(name);
-          if (name === 'mode' || name === 'source') {
+          if (name === 'source') {
             buildDifficultySeg();
             buildLengthSeg();
           }
@@ -540,36 +536,9 @@
   }
 
   // ---------- history ----------
-
-  function historyLabel(h) {
-    const s = h.settings;
-    const what = `${s.mode === 'harmonic' ? 'Harmonic' : 'Melodic'} · ${s.source === 'bach' ? 'Bach' : `Gen. D${s.difficulty}`}`;
-    return what;
-  }
-
-  function renderHistory() {
-    const list = DS.storage.listHistory();
-    const el = $('#history-list');
-    $('#history-empty').hidden = list.length > 0;
-    el.innerHTML = list
-      .slice(0, 40)
-      .map(
-        (h) => `<li>
-          <span class="h-dot ${h.grade != null ? `g${h.grade}` : ''}"></span>
-          <span class="h-what">${esc(historyLabel(h))}</span>
-          <span class="h-detail">${esc(h.detail || '')}</span>
-          <span class="h-when">${timeAgo(h.ts)}</span>
-          <button type="button" class="btn-small" data-redo="${h.id}">Redo</button>
-        </li>`
-      )
-      .join('');
-    $$('#history-list [data-redo]').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        const h = DS.storage.listHistory().find((x) => String(x.id) === btn.dataset.redo);
-        if (h) redoExercise(h);
-      })
-    );
-  }
+  // The practice log was removed; history is still recorded so the masthead
+  // stats chip can summarise graded exercises.
+  function renderHistory() {}
 
   function renderStatsChip() {
     const stats = DS.storage.stats();
@@ -744,11 +713,6 @@
         settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
         applyTheme(settings.theme);
         persist();
-      });
-      $('#btn-clear-history').addEventListener('click', () => {
-        DS.storage.clearHistory();
-        renderHistory();
-        renderStatsChip();
       });
 
       session.on('state', (info) => {

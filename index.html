@@ -37,14 +37,6 @@
       <h2 class="card-title">Exercise</h2>
 
       <div class="field">
-        <span class="field-label">Mode</span>
-        <div class="seg" role="radiogroup" aria-label="Dictation mode">
-          <label><input type="radio" name="mode" value="melodic"><span>Melodic</span></label>
-          <label><input type="radio" name="mode" value="harmonic"><span>Harmonic</span></label>
-        </div>
-      </div>
-
-      <div class="field">
         <span class="field-label">Source</span>
         <div class="seg" role="radiogroup" aria-label="Source">
           <label><input type="radio" name="source" value="bach"><span>Bach chorale</span></label>
@@ -73,14 +65,6 @@
       <div class="field">
         <span class="field-label" id="length-label">Length</span>
         <div class="seg" id="length-seg" role="radiogroup" aria-label="Length"></div>
-      </div>
-
-      <div class="field" id="row-melodicvoice">
-        <span class="field-label">Line</span>
-        <div class="seg" role="radiogroup" aria-label="Which chorale line">
-          <label><input type="radio" name="melodicVoice" value="soprano"><span>Soprano</span></label>
-          <label><input type="radio" name="melodicVoice" value="bass"><span>Bass</span></label>
-        </div>
       </div>
 
       <div class="field" id="row-meter">
@@ -217,14 +201,6 @@
       </div>
     </section>
 
-    <section class="card history anim-3">
-      <div class="history-head">
-        <h2 class="card-title">Practice log</h2>
-        <button class="btn-text" id="btn-clear-history" type="button">Clear</button>
-      </div>
-      <ol id="history-list" class="history-list"></ol>
-      <p class="history-empty" id="history-empty">Nothing yet — your graded exercises will appear here.</p>
-    </section>
   </section>
 </main>
 

@@ -63,6 +63,7 @@
   // Old builds stored voicesPlayed as a string; normalize to an index array.
   const VOICES_FROM_STRING = { all: [0, 1, 2, 3], outer: [0, 3], soprano: [0], bass: [3] };
   function normalizeSettings(s) {
+    s.mode = 'harmonic'; // melodic mode retired — practise a single line via "voices played"
     if (typeof s.voicesPlayed === 'string') s.voicesPlayed = VOICES_FROM_STRING[s.voicesPlayed] || [0, 1, 2, 3];
     if (!Array.isArray(s.voicesPlayed) || !s.voicesPlayed.length)
       s.voicesPlayed = [0, 1, 2, 3];

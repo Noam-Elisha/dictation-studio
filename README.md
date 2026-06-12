@@ -1,6 +1,6 @@
 # Dictation Studio
 
-A static website for practicing **melodic and harmonic dictation** — built for grad-school
+A static website for practicing **four-part harmonic dictation** — built for grad-school
 entrance-exam preparation. Excerpts come from **366 real Bach chorales** or from a
 **rule-based four-part writing generator**, played under exam conditions: the key is
 established, the excerpt is played a set number of times with silent writing gaps, and the
@@ -19,10 +19,12 @@ Everything (chorale data, notation engine, fonts) is bundled locally, so it work
 
 ## What it does
 
-| | Melodic dictation | Harmonic dictation |
-|---|---|---|
-| **Bach chorales** | soprano or bass lines of real phrases | full SATB phrases; answer is the engraved score |
-| **Generated** | rule-based melodies, difficulty 1–4 | four-part progressions with **Roman numeral answers**, difficulty 1–4 |
+Every exercise is **harmonic** (full SATB) — to practise a single line, mute the other voices
+under **Voices played** and you hear just that part while the engraved answer still shows the
+whole texture.
+
+- **Bach chorales** — four-part phrases from 366 real chorales; the answer is the engraved score.
+- **Generated** — rule-based four-part progressions with **Roman-numeral answers**, difficulty 1–5.
 
 Generated harmonic exercises are built from **1–4 phrases**, each a two-bar progression ending
 in a cadence with a fermata — internal phrases favor half cadences, the last is authentic — so
@@ -70,9 +72,8 @@ dissonant sonorities in a row. Soak-tested over thousands of seeds with zero vio
 
 Engraved notation (abcjs), Roman numerals for generated harmonic exercises, **real-time per-voice
 mute/solo replay** (toggle S/A/T/B and hear it change mid-playback), source info (BWV + title +
-transposition, or seed), self-grading
-(Nailed it / Close / Missed), and a **practice log** with one-click **Redo** that rebuilds the
-exact same exercise. Settings, presets, history and stats persist in your browser.
+transposition, or seed), self-grading (Nailed it / Close / Missed), and a one-click **Redo** that
+rebuilds the exact same exercise. Settings and presets persist in your browser.
 
 ### Keyboard
 
