@@ -394,7 +394,9 @@
   // A seam over walkBody so later tasks can splice in prolongation / sequence
   // renderings of the body without touching buildPhrase. For now it is a thin
   // wrapper: a plain weighted walk from the tonic to a chord that can precede
-  // the cadence head.
+  // the cadence head. NOTE: `difficulty` is accepted but not yet forwarded —
+  // it is reserved for the difficulty-gated prolongation / sequence renderings
+  // that later tasks splice in here.
   function composeBody(rng, t, len, cadenceHead, mode, difficulty, chromatic) {
     return walkBody(rng, t, mode === 'minor' ? 'i' : 'I', len, cadenceHead, mode, chromatic);
   }
