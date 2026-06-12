@@ -409,14 +409,67 @@
     },
   };
 
-  // A seam over walkBody so later tasks can splice in prolongation / sequence
-  // renderings of the body without touching buildPhrase. For now it is a thin
-  // wrapper: a plain weighted walk from the tonic to a chord that can precede
-  // the cadence head. NOTE: `difficulty` is accepted but not yet forwarded —
-  // it is reserved for the difficulty-gated prolongation / sequence renderings
-  // that later tasks splice in here.
+  // A seam over walkBody (used only by buildPhrase, so the legacy generate()
+  // path is untouched). It is a walk-with-prolongation builder: at each step it
+  // may, with a difficulty-graded probability, expand the CURRENT function in
+  // place by appending a PROLONG chain (an idiomatic passing/neighbour
+  // elaboration of the same function) instead of taking a single walk-step. The
+  // chord COUNT is unchanged — the chain consumes slots that the walk would
+  // otherwise have filled one-by-one, so the phrase length stays budget-bound;
+  // prolongation only changes the *content* of those slots. D1 never prolongs
+  // (plain block-chord walk). Falls back to a plain walk if attempts fail.
+  //
+  // P_PROLONG is the per-step probability of expanding the current function with
+  // a PROLONG chain. Kept moderate, and rising only gently with difficulty, so
+  // the extra inner chords don't push soprano leaps past the leap-recovery soak
+  // (voicing.test.mjs) — prolongation still surfaces in well over a third of D2+
+  // bodies at these rates.
+  const P_PROLONG = { 1: 0, 2: 0.22, 3: 0.28, 4: 0.30 };
   function composeBody(rng, t, len, cadenceHead, mode, difficulty, chromatic) {
-    return walkBody(rng, t, mode === 'minor' ? 'i' : 'I', len, cadenceHead, mode, chromatic);
+    const tonic = mode === 'minor' ? 'i' : 'I';
+    if (difficulty <= 1) return walkBody(rng, t, tonic, len, cadenceHead, mode, chromatic);
+    const pProlong = P_PROLONG[difficulty] != null ? P_PROLONG[difficulty] : 0.42;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const out = [tonic];
+      let ok = true;
+      while (out.length < len) {
+        const cur = out[out.length - 1];
+        const remaining = len - out.length;
+        // Try a prolongation chain that expands the current chord's function.
+        if (!RESOLUTION[cur] && rng() < pProlong) {
+          const fn = CAT[mode][cur].fn;
+          const pool = (PROLONG[mode][fn] || []).filter(
+            (chain) => chain[0] === cur && chain.length - 1 <= remaining && chain.length >= 2
+          );
+          if (pool.length) {
+            const chain = DS.rng.pick(rng, pool);
+            for (let k = 1; k < chain.length; k++) out.push(chain[k]);
+            continue; // walk resumes from the chain's last chord
+          }
+        }
+        // Otherwise take a single weighted walk-step (mirrors walkBody).
+        let options = (t[cur] || []).filter(
+          ([s, w]) =>
+            w > 0 && s !== cur && !CADENCE_ONLY.has(s) &&
+            tendencyCompatible(CAT[mode][cur], CAT[mode][s])
+        );
+        if (RESOLUTION[cur]) options = RESOLUTION[cur].map((s) => [s, 1]);
+        if (remaining === 1) options = options.filter(([s]) => !RESOLUTION[s]);
+        if (!options.length) { ok = false; break; }
+        if (chromatic) options = options.map(([s, w]) => [s, isColour(s) ? w * 2.4 : w]);
+        out.push(DS.rng.weighted(rng, options));
+      }
+      if (!ok) continue;
+      if (out.length !== len) continue; // a chain may overshoot the budget
+      const last = out[out.length - 1];
+      if (RESOLUTION[last]) continue;
+      if (!canPrecede(t, last, cadenceHead, mode)) continue;
+      if (last === cadenceHead) continue;
+      return out;
+    }
+    // Prolongation attempts exhausted — fall back to a plain walk so composeBody
+    // always returns a len-long array.
+    return walkBody(rng, t, tonic, len, cadenceHead, mode, chromatic);
   }
 
   const TPQ = 48, BAR = 192;

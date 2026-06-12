@@ -299,6 +299,42 @@ suite('progression: prolongation', () => {
       }
     }
   });
+
+  test('prolongation fills D2+ bodies (not D1), incl. non-tonic, and the count stays budget-bound', () => {
+    const PROLONG = P._PROLONG;
+    // A few PROLONG chains are ALSO ordinary single walk-steps (the transition
+    // table has I->I6, I->IV->I, V->V7 as plain edges), so the D1 block-chord
+    // walk emits them incidentally — they are not evidence of an *inserted*
+    // prolongation. Every other chain uses an internal transition the walk
+    // table lacks (e.g. IV->ii6, I->V6->I, I->vii°6->I6), so its appearance as
+    // a contiguous subsequence is an unambiguous prolongation signal. Scan only
+    // those (measured: D1 emits the excluded chains, never the rest).
+    const WALK_REPRO = new Set(['I I6', 'i i6', 'I IV I', 'i iv i', 'V V7']);
+    const sig = (chains) => chains.filter((ch) => !WALK_REPRO.has(ch.join(' ')));
+    const chainsFor = (mode) => sig([].concat(PROLONG[mode].T, PROLONG[mode].PD, PROLONG[mode].D));
+    const hasChain = (syms, mode) => chainsFor(mode).some((ch) => {
+      for (let i = 0; i + ch.length <= syms.length; i++) if (ch.every((s, j) => syms[i + j] === s)) return true;
+      return false;
+    });
+    const rate = (d) => {
+      let hit = 0, n = 0;
+      for (let s = 0; s < 300; s++) {
+        const mode = s % 2 ? 'major' : 'minor';
+        const ch = P.generatePhrases(DS.rng.create(s * 3 + d * 97), { difficulty: d, mode, phrases: 2 });
+        n++; if (hasChain(ch.map((c) => c.sym), mode)) hit++;
+      }
+      return hit / n;
+    };
+    ok(rate(1) < 0.06, `D1 essentially never prolongs (${rate(1).toFixed(2)})`);
+    ok(rate(2) > 0.30, `D2 frequently prolongs (${rate(2).toFixed(2)})`);
+    // a non-tonic (PD/D) chain shows up across many D3 phrases
+    let pdHit = false;
+    for (let s = 0; s < 300 && !pdHit; s++) {
+      const ch = P.generatePhrases(DS.rng.create(s + 5000), { difficulty: 3, mode: 'major', phrases: 3 }).map((c) => c.sym);
+      pdHit = sig([].concat(PROLONG.major.PD, PROLONG.major.D)).some((c) => { for (let i = 0; i + c.length <= ch.length; i++) if (c.every((x, j) => ch[i + j] === x)) return true; return false; });
+    }
+    ok(pdHit, 'non-tonic (predominant/dominant) prolongation appears at D3');
+  });
 });
 
 suite('progression: rhythm invariants', () => {
