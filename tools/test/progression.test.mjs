@@ -299,4 +299,18 @@ suite('progression: rhythm invariants', () => {
       ok(ph[ph.length - 1].fermata === true, 'cadence carries a fermata');
     }
   });
+
+  test('generatePhrases: phrase-ends on strong beats with fermatas, pickups, no barline crossings', () => {
+    let midBar = 0, ends = 0;
+    for (let s = 0; s < 500; s++) {
+      const d = 1 + (s % 4);
+      const all = P.generatePhrases(DS.rng.create(s * 11 + d), { difficulty: d, mode: s % 2 ? 'major' : 'minor', phrases: 2 + (s % 3) });
+      ok(!crossesBarline(all), 'no note crosses a barline');           // whole piece starts at phase 0
+      ok(all.every((c) => c.dur !== 192), 'no whole notes');
+      ok(all.reduce((a, c) => a + c.dur, 0) % 192 === 0, 'piece closes the final bar');
+      const st = startTicks(all);
+      for (const e of all.phraseEnds) { ok(strongBeat(st[e]), `phrase-end ${e} on a strong beat`); ok(all[e].fermata === true, 'fermata'); ends++; if (st[e] % 192 === 96) midBar++; }
+    }
+    ok(midBar / ends > 0.1, `some phrase-ends fall on beat 3 (pickups): ${midBar}/${ends}`);
+  });
 });

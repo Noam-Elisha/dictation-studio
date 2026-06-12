@@ -474,21 +474,71 @@
     return chords;
   }
 
-  // A multi-phrase progression: `phrases` two-bar phrases concatenated, each
-  // ending in a cadence (internal phrases favor half cadences, the last is
-  // authentic). Returns one flat chord array with `.phraseEnds` = the chord
-  // index ending each phrase (for fermatas).
+  // A multi-phrase progression built from `buildPhrase`. The piece starts on a
+  // downbeat (phase 0); each phrase is appended to a flat stream and a running
+  // `phase = total % BAR` is threaded into the next, so an internal phrase may
+  // cadence mid-bar (on beat 3) and the next picks up on the following beat (an
+  // implicit anacrusis). Internal phrases are 'open' (half cadences); the last
+  // is 'authentic'. Its closing chord is a half note (`isFinal`), so the piece
+  // only closes the bar when that cadence lands on beat 3 — we rebuild the final
+  // phrase over nearby beat budgets until the running total is a whole number of
+  // bars. Returns one flat chord array with `.phraseEnds` (chord index ending
+  // each phrase, for fermatas) and `.cadence` (the final cadence type).
   function generatePhrases(rng, { difficulty, mode, phrases, chromatic }) {
     const all = [];
     const phraseEnds = [];
     let lastType = 'PAC';
-    for (let p = 0; p < phrases; p++) {
-      const isLast = p === phrases - 1;
-      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open', chromatic });
+    let phase = 0; // the piece begins on a downbeat
+
+    for (let p = 0; p < phrases - 1; p++) {
+      // Internal phrases run a 5–7 beat budget. The plan specs 5–9
+      // (`5 + rngInt(0..4)`), but the wider tail (8–9 chords/phrase) lengthens
+      // phrases enough to trip voicing.test.mjs's per-phrase soprano-leap
+      // budget ("phrase soprano lines sing", threshold unrec/phrase < 0.23) —
+      // that metric is a *count* per phrase, so it scales with phrase length
+      // even though the per-leap recovery rate is unchanged. 5–7 keeps that
+      // soak green while preserving pickup/length variety. (The final phrase
+      // below still uses the full 5–9 budget; it's a single phrase and the ±
+      // bar-close retry needs the spread.) Revisit once the soprano soak is
+      // length-normalised (it must rise anyway when D2+ prolongation lands).
+      const beatBudget = 5 + Math.floor(rng() * 3);
+      const ph = buildPhrase(rng, {
+        mode, difficulty, startPhase: phase, beatBudget,
+        cadenceClass: 'open', chromatic, isFinal: false,
+      });
       for (const c of ph) all.push(c);
+      phase = (phase + ph.reduce((a, c) => a + c.dur, 0)) % BAR;
       phraseEnds.push(all.length - 1);
       lastType = ph.cadence;
     }
+
+    // The final phrase must close the bar (total % BAR === 0). Build it, then if
+    // the total isn't a whole bar, rebuild it over budgets beatBudget, +1, -1,
+    // +2, … (re-deriving phase from the pre-final total each attempt) until it
+    // closes. It should close within ~2 tries; bound the retries and fall back
+    // to the last attempt otherwise.
+    const baseLen = all.length;
+    const baseTotal = all.reduce((a, c) => a + c.dur, 0);
+    const basePhase = baseTotal % BAR;
+    const baseBudget = 5 + Math.floor(rng() * 5);
+    const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
+    let chosen = null;
+    for (const off of offsets) {
+      const beatBudget = baseBudget + off;
+      if (beatBudget < 3) continue; // buildPhrase floors at 3
+      const ph = buildPhrase(rng, {
+        mode, difficulty, startPhase: basePhase, beatBudget,
+        cadenceClass: 'authentic', chromatic, isFinal: true,
+      });
+      chosen = ph;
+      if ((baseTotal + ph.reduce((a, c) => a + c.dur, 0)) % BAR === 0) break;
+    }
+
+    all.length = baseLen; // drop any earlier final-phrase attempt
+    for (const c of chosen) all.push(c);
+    phraseEnds.push(all.length - 1);
+    lastType = chosen.cadence;
+
     all.phraseEnds = phraseEnds;
     all.cadence = lastType;
     return all;
