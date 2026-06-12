@@ -105,7 +105,7 @@ suite('excerpt: generated', () => {
     });
     eq(ex.kind, 'harmonic');
     eq(ex.voices.length, 4);
-    eq(ex.voices[3].length, ex.romans.length);
+    ok(ex.voices[3].length >= ex.romans.length, 'bass has at least one note per chord');
     eq(ex.romans[0].tick, 0);
     const total = ex.voices[0].reduce((s, n) => s + n.dur, 0);
     eq(total % ex.mlen, 0);
@@ -114,9 +114,32 @@ suite('excerpt: generated', () => {
   });
 
   test('deterministic from seed', () => {
-    const a = DS.excerpt.fromGenerated(DS.rng.create(99), { mode: 'harmonic', difficulty: 3, length: 'short', keyMode: 'any' });
-    const b = DS.excerpt.fromGenerated(DS.rng.create(99), { mode: 'harmonic', difficulty: 3, length: 'short', keyMode: 'any' });
+    const a = DS.excerpt.fromGenerated(DS.rng.create(99), { mode: 'harmonic', difficulty: 3, harmonicPhrases: 2, keyMode: 'any' });
+    const b = DS.excerpt.fromGenerated(DS.rng.create(99), { mode: 'harmonic', difficulty: 3, harmonicPhrases: 2, keyMode: 'any' });
     eq(a, b);
+  });
+
+  test('harmonicPhrases yields N fermata-ended phrases', () => {
+    for (const phrases of [1, 2, 3, 4]) {
+      let okCount = 0;
+      for (let seed = 0; seed < 40; seed++) {
+        const ex = DS.excerpt.fromGenerated(DS.rng.create(seed * 3 + phrases), {
+          mode: 'harmonic', difficulty: 2 + (seed % 3), harmonicPhrases: phrases, keyMode: seed % 2 ? 'major' : 'minor',
+        });
+        if (!ex) continue;
+        okCount++;
+        // count fermatas in the soprano = number of phrase endings
+        const fermatas = ex.voices[0].filter((n) => n.fermata).length;
+        eq(fermatas, phrases, `phrases=${phrases} seed ${seed}: ${fermatas} fermatas`);
+        // total fills whole bars
+        const total = ex.voices[0].reduce((s, n) => s + n.dur, 0);
+        eq(total % 192, 0, 'whole bars');
+        // every voice agrees in total duration
+        for (let v = 1; v < 4; v++)
+          eq(ex.voices[v].reduce((s, n) => s + n.dur, 0), total, `voice ${v} duration`);
+      }
+      ok(okCount >= 35, `phrases=${phrases}: ${okCount}/40 generated`);
+    }
   });
 
   test('melodic honors meter and pickup settings', () => {

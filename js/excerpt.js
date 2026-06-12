@@ -200,23 +200,45 @@
     const sig = T.fifths(key);
 
     if (settings.mode === 'harmonic') {
-      const bars = HARMONIC_BARS[settings.length || 'medium'] || 3;
+      const phrases = Math.min(4, Math.max(1, settings.harmonicPhrases || 2));
       let chords = null;
       let voicesByChord = null;
-      for (let attempt = 0; attempt < 10 && !voicesByChord; attempt++) {
-        chords = DS.progression.generate(rng, {
+      for (let attempt = 0; attempt < 12 && !voicesByChord; attempt++) {
+        chords = DS.progression.generatePhrases(rng, {
           difficulty: settings.difficulty || 1,
           mode: key.mode,
-          bars,
+          phrases,
         });
         voicesByChord = DS.voicing.harmonize(rng, key, chords);
       }
       if (!voicesByChord) return null;
 
+      const phraseEnds = new Set(chords.phraseEnds);
       const voices = DS.nct.assemble(rng, key, chords, voicesByChord, {
         difficulty: settings.difficulty || 1,
         embellish: settings.embellish,
+        skipChords: phraseEnds,
       });
+      // mark a fermata on each phrase-ending chord (held, like a chorale)
+      const startTicks = [];
+      let acc = 0;
+      for (const c of chords) {
+        startTicks.push(acc);
+        acc += c.dur;
+      }
+      for (const e of chords.phraseEnds) {
+        const tk = startTicks[e];
+        for (const vc of voices) {
+          let t = 0;
+          for (const nt of vc) {
+            if (t === tk) {
+              nt.fermata = true;
+              break;
+            }
+            t += nt.dur;
+          }
+        }
+      }
       const romans = [];
       let tick = 0;
       for (const c of chords) {
@@ -238,7 +260,7 @@
         meta: {
           seedUsed: settings.seed != null ? settings.seed : null,
           difficulty: settings.difficulty || 1,
-          length: settings.length || 'medium',
+          phrases,
           cadence: chords.cadence || null,
         },
       };

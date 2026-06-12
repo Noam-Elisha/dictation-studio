@@ -242,9 +242,11 @@
       durs: chords.map((c) => c.dur),
       chordPcs: block.map((ch) => new Set(ch.map((p) => pc(T.midi(p))))),
     };
+    const skip = opts.skipChords || new Set(); // phrase-end chords stay clean (held)
 
     for (let i = 0; i < n - 1; i++) {
       if (chords[i].dur < 2 * E) continue;
+      if (skip.has(i)) continue; // don't embellish out of a held phrase ending
       let placed = 0;
       for (const v of DS.rng.shuffle(rng, [0, 1, 2, 3])) {
         if (rng() >= pBase * Math.pow(0.62, placed)) continue;
@@ -253,7 +255,7 @@
         const p2 = block[i + 1][v];
 
         // choose off-beat vs on-beat; on-beat needs chord i+1 to have room
-        const wantOn = rng() < pOn && chords[i + 1].dur >= 2 * E && !on[v].has(i + 1);
+        const wantOn = rng() < pOn && chords[i + 1].dur >= 2 * E && !on[v].has(i + 1) && !skip.has(i + 1);
         let chosen = null;
         let kind = 'off';
         if (wantOn) {
@@ -276,6 +278,13 @@
           if (!cands.length) continue;
           // échappées are peripheral; usually leave a plain step unembellished
           if (cands.every((c) => c.type === 'escape') && rng() > 0.3) continue;
+          // neighbor tones (on a repeated note) are easy to overuse — never put
+          // one right after this voice's previous figure (that produces a voice
+          // just oscillating between two notes in eighths), and thin them out
+          if (cands.every((c) => /neighbor/.test(c.type))) {
+            if (off[v].has(i - 1) || on[v].has(i - 1)) continue;
+            if (rng() < 0.35) continue;
+          }
           chosen = DS.rng.pick(rng, cands);
           kind = 'off';
         }
@@ -297,7 +306,31 @@
       }
     }
 
-    return buildAll(block, chords, off, on);
+    return deAlternate(buildAll(block, chords, off, on));
+  }
+
+  // Safety net: collapse any voice that ends up oscillating between two notes
+  // in straight eighths (X Y X Y) by holding the second pair as a plain note —
+  // removing a neighbor only reduces dissonance, never adds a parallel.
+  function deAlternate(voices) {
+    for (const notes of voices) {
+      const isE = (n) => n.dur === E && n.step >= 0 && !n.tieStart && !n.tieEnd;
+      let i = 0;
+      while (i + 3 < notes.length) {
+        if (
+          isE(notes[i]) && isE(notes[i + 1]) && isE(notes[i + 2]) && isE(notes[i + 3]) &&
+          T.midi(notes[i]) === T.midi(notes[i + 2]) &&
+          T.midi(notes[i + 1]) === T.midi(notes[i + 3]) &&
+          T.midi(notes[i]) !== T.midi(notes[i + 1])
+        ) {
+          notes[i + 2].dur += notes[i + 3].dur; // hold the second X, drop its neighbor
+          notes.splice(i + 3, 1);
+        } else {
+          i++;
+        }
+      }
+    }
+    return voices;
   }
 
   DS.nct = { assemble, offbeatCandidates, onbeatCandidates };

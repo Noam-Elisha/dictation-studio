@@ -224,16 +224,21 @@
     return syms.map((s) => map[s] || s);
   }
 
-  function pickCadence(rng, difficulty, mode, maxLen) {
+  // cadenceClass: 'authentic' (PAC/IAC only, for a final phrase) | 'open'
+  // (favor half/Phrygian cadences, for an internal phrase) | undefined (any).
+  function pickCadence(rng, difficulty, mode, maxLen, cadenceClass) {
     let pool = CADENCES.filter((c) => c.minD <= difficulty && c.syms.length <= maxLen);
     if (mode === 'minor' && difficulty >= 3)
       pool = pool.concat([{ syms: ['iv6', 'V'], type: 'PHC', minD: 3 }]);
+    if (cadenceClass === 'authentic') pool = pool.filter((c) => c.type === 'PAC' || c.type === 'IAC');
+    if (!pool.length) pool = CADENCES.filter((c) => c.type === 'PAC' && c.syms.length <= maxLen);
     // Favor spicier (higher-minD) cadences as difficulty rises, so chromatic
     // cadences (N6, augmented sixths, Phrygian) actually surface at D3-D4.
-    const weighted = pool.map((c) => [
-      c,
-      (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD),
-    ]);
+    const weighted = pool.map((c) => {
+      let w = (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD);
+      if (cadenceClass === 'open') w *= c.type === 'HC' || c.type === 'PHC' ? 3 : c.type === 'DC' ? 1.3 : 0.6;
+      return [c, w];
+    });
     const chosen = DS.rng.weighted(rng, weighted);
     const syms = mode === 'minor' ? minorize(chosen.syms) : chosen.syms.slice();
     return { syms, type: chosen.type };
@@ -331,13 +336,13 @@
     return durs;
   }
 
-  function generate(rng, { difficulty, mode, bars, length }) {
+  function generate(rng, { difficulty, mode, bars, length, cadenceClass }) {
     const t = table(difficulty, mode);
     const tonic = mode === 'minor' ? 'i' : 'I';
     const durations = length ? legacyDurations(length) : buildRhythm(rng, bars || 3);
     const M = durations.length;
     for (let attempt = 0; attempt < 40; attempt++) {
-      const cadence = pickCadence(rng, difficulty, mode, M - 1);
+      const cadence = pickCadence(rng, difficulty, mode, M - 1, cadenceClass);
       const bodyLen = M - cadence.syms.length;
       if (bodyLen < 1) continue;
       const body = walkBody(rng, t, tonic, bodyLen, cadence.syms[0], mode);
@@ -362,6 +367,26 @@
     return chords;
   }
 
+  // A multi-phrase progression: `phrases` two-bar phrases concatenated, each
+  // ending in a cadence (internal phrases favor half cadences, the last is
+  // authentic). Returns one flat chord array with `.phraseEnds` = the chord
+  // index ending each phrase (for fermatas).
+  function generatePhrases(rng, { difficulty, mode, phrases }) {
+    const all = [];
+    const phraseEnds = [];
+    let lastType = 'PAC';
+    for (let p = 0; p < phrases; p++) {
+      const isLast = p === phrases - 1;
+      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open' });
+      for (const c of ph) all.push(c);
+      phraseEnds.push(all.length - 1);
+      lastType = ph.cadence;
+    }
+    all.phraseEnds = phraseEnds;
+    all.cadence = lastType;
+    return all;
+  }
+
   // Display label, e.g. viio6 -> vii°6, I64c -> I64
   function display(sym) {
     return sym
@@ -376,5 +401,5 @@
     return { ...clone(spec), sym };
   }
 
-  DS.progression = { generate, chordSpec, display };
+  DS.progression = { generate, generatePhrases, chordSpec, display };
 })();

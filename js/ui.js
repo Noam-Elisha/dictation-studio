@@ -92,15 +92,37 @@
     sel.innerHTML = opts.map((n) => `<option value="${n}">${n.replace('#', '♯').replace('b', '♭')}</option>`).join('');
   }
 
-  function lengthLabels() {
+  // The length control adapts: generated harmonic chooses 1-4 phrases (stored
+  // in harmonicPhrases); Bach chooses 1-3 phrases and melodic chooses bars
+  // (both stored in length as short/medium/long).
+  function buildLengthSeg() {
+    const seg = $('#length-seg');
     const { mode, source } = settings;
-    let labels;
-    if (source === 'bach') labels = ['1 phrase', '2 phrases', '3 phrases'];
-    else if (mode === 'harmonic') labels = ['5 chords', '7 chords', '9 chords'];
-    else labels = ['2 bars', '4 bars', '6 bars'];
-    $('#len-short').textContent = labels[0];
-    $('#len-medium').textContent = labels[1];
-    $('#len-long').textContent = labels[2];
+    let opts;
+    let isPhrases = false;
+    if (source === 'generated' && mode === 'harmonic') {
+      opts = [[1, '1 phrase'], [2, '2 phrases'], [3, '3 phrases'], [4, '4 phrases']];
+      isPhrases = true;
+    } else if (source === 'bach') {
+      opts = [['short', '1 phrase'], ['medium', '2 phrases'], ['long', '3 phrases']];
+    } else {
+      opts = [['short', '2 bars'], ['medium', '4 bars'], ['long', '6 bars']];
+    }
+    const current = isPhrases ? settings.harmonicPhrases : settings.length;
+    seg.classList.toggle('seg-4', opts.length === 4);
+    seg.innerHTML = opts
+      .map(
+        ([v, label]) =>
+          `<label><input type="radio" name="lengthsel" value="${v}" ${String(v) === String(current) ? 'checked' : ''}><span>${label}</span></label>`
+      )
+      .join('');
+    $$('#length-seg input').forEach((el) =>
+      el.addEventListener('change', () => {
+        if (isPhrases) settings.harmonicPhrases = Number(el.value);
+        else settings.length = el.value;
+        persist();
+      })
+    );
   }
 
   function applyVisibility() {
@@ -113,13 +135,11 @@
     $('#row-voicesplayed').hidden = mode !== 'harmonic';
     $('#row-fermatas').hidden = source !== 'bach';
     $('#sel-fixedkey').hidden = settings.keyMode !== 'fixed';
-    lengthLabels();
   }
 
   function settingsToUI() {
     radioSet('mode', settings.mode);
     radioSet('source', settings.source);
-    radioSet('length', settings.length);
     radioSet('melodicVoice', settings.melodicVoice);
     radioSet('meter', settings.meter);
     radioSet('establish', settings.establish);
@@ -140,6 +160,7 @@
     $('#out-gap').textContent = `${settings.gapSec} s`;
     $('#out-plays').textContent = settings.plays;
     buildDifficultySeg();
+    buildLengthSeg();
     applyVisibility();
   }
 
@@ -149,11 +170,14 @@
   }
 
   function wireSettings() {
-    for (const name of ['mode', 'source', 'length', 'melodicVoice', 'meter', 'establish', 'countIn']) {
+    for (const name of ['mode', 'source', 'melodicVoice', 'meter', 'establish', 'countIn']) {
       $$(`input[name="${name}"]`).forEach((el) =>
         el.addEventListener('change', () => {
           settings[name] = radioGet(name);
-          if (name === 'mode' || name === 'source') buildDifficultySeg();
+          if (name === 'mode' || name === 'source') {
+            buildDifficultySeg();
+            buildLengthSeg();
+          }
           persist();
         })
       );
@@ -622,6 +646,7 @@
       ts: Date.now(),
       settings: {
         mode: s.mode, source: s.source, difficulty: s.difficulty, length: s.length,
+        harmonicPhrases: s.harmonicPhrases,
         keyMode: s.keyMode, fixedKey: s.fixedKey, meter: s.meter, melodicVoice: s.melodicVoice,
         transpose: s.transpose, pickup: s.pickup,
       },

@@ -24,6 +24,10 @@ Everything (chorale data, notation engine, fonts) is bundled locally, so it work
 | **Bach chorales** | soprano or bass lines of real phrases | full SATB phrases; answer is the engraved score |
 | **Generated** | rule-based melodies, difficulty 1–4 | four-part progressions with **Roman numeral answers**, difficulty 1–4 |
 
+Generated harmonic exercises are built from **1–4 phrases**, each a two-bar progression ending
+in a cadence with a fermata — internal phrases favor half cadences, the last is authentic — so
+they're structured like a real chorale.
+
 **Generated difficulty ladder (harmonic):** 1 = I/IV/V/V7 + cadences · 2 = ii, inversions,
 cadential 6/4, vii°6 · 3 = secondary dominants, tonicized mediant, deceptive cadences, Phrygian
 half cadence · 4 = mode mixture, Neapolitan 6, Italian/French/German augmented sixths, vii°7.

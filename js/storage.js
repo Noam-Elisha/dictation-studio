@@ -39,7 +39,8 @@
     difficulty: 2,
     keyMode: 'any', // any | major | minor | fixed
     fixedKey: 'C major',
-    length: 'medium', // short | medium | long
+    length: 'medium', // short | medium | long (bach phrases, melodic bars)
+    harmonicPhrases: 2, // generated harmonic: number of phrases (1-4)
     meter: 'any', // any | 4/4 | 3/4  (melodic)
     melodicVoice: 'soprano', // soprano | bass (bach melodic)
     transpose: true, // bach: random transposition
