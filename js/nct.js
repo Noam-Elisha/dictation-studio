@@ -53,10 +53,6 @@
     const alter = (sc.find((x) => x.step === step) || { alter: 0 }).alter;
     return { step, alter, oct };
   }
-  // same letter, a chromatic semitone away (G->G#, A->Ab)
-  function chromaticPass(p, dir) {
-    return { step: p.step, alter: p.alter + dir, oct: p.oct };
-  }
   // adjacent lower letter, a half step below (chromatic lower neighbor: G->F#)
   function chromaticHalf(p, dir) {
     const absStep = p.oct * 7 + p.step + dir;
@@ -80,14 +76,16 @@
     const iv = T.intervalBetween(p1, p2);
     const adv = difficulty >= 3;
     if (Math.abs(iv.d) === 2 && (Math.abs(iv.s) === 3 || Math.abs(iv.s) === 4)) {
+      // passing tone filling a third with the diatonic note between
       out.push({ type: 'passing', pitch: diatonicStep(key, p1, Math.sign(iv.d)) });
-    } else if (Math.abs(iv.d) === 1 && Math.abs(iv.s) === 2 && adv) {
-      out.push({ type: 'chromatic passing', pitch: chromaticPass(p1, Math.sign(iv.s)) });
     } else if (iv.d === 0 && iv.s === 0) {
       out.push({ type: 'upper neighbor', pitch: diatonicStep(key, p1, 1) });
       out.push({ type: 'lower neighbor', pitch: diatonicStep(key, p1, -1) });
       if (adv) out.push({ type: 'chromatic neighbor', pitch: chromaticHalf(p1, -1) });
     } else if (Math.abs(iv.d) === 1 && Math.abs(iv.s) <= 2 && adv) {
+      // a plain whole/half step: deliberately NOT a chromatic fill (that's lazy
+      // and cross-relation-prone). An échappée is the only option here, and it
+      // is kept rare in assemble().
       out.push({ type: 'escape', pitch: diatonicStep(key, p1, -Math.sign(iv.d)) });
     }
     return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
@@ -276,6 +274,8 @@
             pitchOK(c.pitch, held, v, [p1, p2])
           );
           if (!cands.length) continue;
+          // échappées are peripheral; usually leave a plain step unembellished
+          if (cands.every((c) => c.type === 'escape') && rng() > 0.3) continue;
           chosen = DS.rng.pick(rng, cands);
           kind = 'off';
         }
