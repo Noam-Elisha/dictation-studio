@@ -440,5 +440,35 @@
     return voices;
   }
 
-  DS.nct = { assemble, offbeatCandidates, onbeatCandidates };
+  // Split any note whose span crosses a barline into tied pieces, one per bar it
+  // spans. abc.js renders ties but THROWS on a single note that overshoots a
+  // barline; NCT figures and deAlternate merges near a mid-bar barline (which
+  // flexible phrasing makes common) can produce such notes. Rests are split
+  // without ties.
+  function splitAtBarlines(voices, mlen) {
+    return voices.map((notes) => {
+      const out = [];
+      let t = 0;
+      for (const n of notes) {
+        let start = t, remaining = n.dur, first = true;
+        while (remaining > 0) {
+          const barEnd = (Math.floor(start / mlen) + 1) * mlen;
+          const seg = Math.min(remaining, barEnd - start);
+          const last = seg === remaining;
+          const piece = { ...n, dur: seg };
+          if (n.step >= 0) {
+            piece.tieEnd = first ? !!n.tieEnd : true;   // a split adds a tie into each later piece
+            piece.tieStart = last ? !!n.tieStart : true; // ...and out of each earlier piece
+          }
+          if (!first) piece.fermata = false;            // the onset (and its fermata) stays on the first piece
+          out.push(piece);
+          start += seg; remaining -= seg; first = false;
+        }
+        t += n.dur;
+      }
+      return out;
+    });
+  }
+
+  DS.nct = { assemble, offbeatCandidates, onbeatCandidates, splitAtBarlines };
 })();

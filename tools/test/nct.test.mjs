@@ -337,3 +337,49 @@ suite('nct: embellishment', () => {
     ok(suspensions > anticipations, `suspensions (${suspensions}) outnumber anticipations (${anticipations})`);
   });
 });
+
+suite('nct: barline-crossing notes are split into ties', () => {
+  const countCrossings = (voices, mlen) => {
+    let c = 0;
+    for (const notes of voices) {
+      let t = 0;
+      for (const n of notes) { if (Math.floor((t + n.dur - 1) / mlen) !== Math.floor(t / mlen)) c++; t += n.dur; }
+    }
+    return c;
+  };
+
+  test('splitAtBarlines splits a crossing note into tied pieces (rests untied)', () => {
+    const v = [[{ step: 0, alter: 0, oct: 4, dur: 144 }, { step: 1, alter: 0, oct: 4, dur: 72 }]];
+    const out = DS.nct.splitAtBarlines(v, 192)[0];
+    eq(out.map((n) => n.dur), [144, 48, 24], 'note split at the barline');
+    eq(out[1].tieStart, true, 'first piece ties out');
+    eq(out[2].tieEnd, true, 'second piece ties in');
+    const r = [[{ step: -1, dur: 240 }]];
+    const ro = DS.nct.splitAtBarlines(r, 192)[0];
+    eq(ro.map((n) => n.dur), [192, 48], 'rest split at the barline');
+    ok(!ro[0].tieStart && !ro[1].tieEnd, 'rests are not tied');
+  });
+
+  test('the shipped pipeline produces no barline-crossing notes after the split', () => {
+    let raw = 0, fixed = 0, pieces = 0;
+    for (let d = 1; d <= 5; d++) for (let seed = 0; seed < 120; seed++) {
+      const harmDiff = Math.min(4, d), chromatic = d >= 5;
+      const mode = seed % 2 ? 'major' : 'minor';
+      const key = mode === 'major' ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 7 + d * 1000);
+      const phrases = 2 + (seed % 3);
+      let chords = harmDiff >= 4
+        ? DS.progression.generateModulating(rng, { difficulty: harmDiff, mode, phrases, key1: key, chromatic })
+        : null;
+      if (!chords) chords = DS.progression.generatePhrases(rng, { difficulty: harmDiff, mode, phrases, chromatic });
+      const block = DS.voicing.harmonize(rng, key, chords);
+      if (!block) continue;
+      pieces++;
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: d, skipChords: new Set(chords.phraseEnds) });
+      raw += countCrossings(voices, 192);
+      fixed += countCrossings(DS.nct.splitAtBarlines(voices, 192), 192);
+    }
+    ok(raw > 0, `the bug reproduces in raw NCT output (${raw} crossings over ${pieces} pieces)`);
+    eq(fixed, 0, `splitAtBarlines removes every barline crossing (raw ${raw} -> 0)`);
+  });
+});

@@ -236,7 +236,7 @@
       if (!voicesByChord) return null;
 
       const phraseEnds = new Set(chords.phraseEnds);
-      const voices = DS.nct.assemble(rng, key, chords, voicesByChord, {
+      let voices = DS.nct.assemble(rng, key, chords, voicesByChord, {
         difficulty, // full difficulty (5 embellishes maximally over D4 harmony)
         embellish: settings.embellish,
         skipChords: phraseEnds,
@@ -264,6 +264,9 @@
           }
         }
       }
+      // NCT figures / deAlternate merges can leave a note crossing a barline,
+      // which abc.js refuses to render — split those into tied pieces.
+      voices = DS.nct.splitAtBarlines(voices, 192);
       const romans = [];
       let tick = 0;
       for (const c of chords) {
