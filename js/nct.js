@@ -2,7 +2,7 @@
 // voice per chord, quarter-note harmonic rhythm) and weaves in the off-beat
 // figures that make four-part writing sound like real chorales:
 //   passing tones, neighbor tones, escape tones (diatonic and chromatic),
-//   plus on-beat suspensions and appoggiaturas.
+//   plus on-beat suspensions and accented passing tones.
 //
 // Density is calibrated to the Bach corpus (~0.86 of the four voices carry an
 // eighth-note figure on a typical beat at the top difficulty) and scaled down
@@ -25,7 +25,7 @@
 
   // per-voice, per-beat probability of attempting a figure, by difficulty
   const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46 };
-  // chance an attempted figure is an on-beat suspension/appoggiatura vs off-beat
+  // chance an attempted figure is an on-beat (suspension / accented passing) vs off-beat
   const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36 };
 
   function ic(hi, lo) {
@@ -268,7 +268,7 @@
         }
         if (!chosen) {
           // a quarter chord has room for only one figure; don't add an off-beat
-          // tail to a chord that already carries an on-beat suspension/appoggiatura
+          // tail to a chord that already carries an on-beat figure
           if (on[v].has(i)) continue;
           const cands = offbeatCandidates(key, p1, p2, difficulty).filter((c) =>
             pitchOK(c.pitch, held, v, [p1, p2])
