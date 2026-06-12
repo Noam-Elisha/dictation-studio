@@ -425,9 +425,26 @@
   // (voicing.test.mjs) — prolongation still surfaces in well over a third of D2+
   // bodies at these rates.
   const P_PROLONG = { 1: 0, 2: 0.22, 3: 0.28, 4: 0.30 };
+  // Probability (per composeBody call, D3+) that the WHOLE body is rendered as a
+  // descending-fifths sequence instead of a prolongation walk. These are the
+  // *attempt* rates: sequenceBody returns null for some (mode, len, cadenceHead)
+  // combinations, so the effective sequence rate is lower. The chromatic UI tier
+  // (D5, harmonised at D4 with chromatic=true) leans into sequences hardest.
+  const P_SEQ = { 3: 0.25, 4: { plain: 0.4, chromatic: 0.5 } };
   function composeBody(rng, t, len, cadenceHead, mode, difficulty, chromatic) {
     const tonic = mode === 'minor' ? 'i' : 'I';
     if (difficulty <= 1) return walkBody(rng, t, tonic, len, cadenceHead, mode, chromatic);
+    // D3+: occasionally render the entire body as a descending-fifths sequence.
+    // Call sequenceBody at most ONCE per composeBody (its voicing-probe gate is
+    // costly), never inside the walk-attempt loop; fall through on null.
+    if (difficulty >= 3 && len >= 3) {
+      const pSeqRaw = P_SEQ[difficulty];
+      const pSeq = typeof pSeqRaw === 'number' ? pSeqRaw : (chromatic ? pSeqRaw.chromatic : pSeqRaw.plain);
+      if (pSeq && rng() < pSeq) {
+        const seq = sequenceBody(rng, mode, len, difficulty, chromatic, cadenceHead);
+        if (seq) return seq;
+      }
+    }
     const pProlong = P_PROLONG[difficulty] != null ? P_PROLONG[difficulty] : 0.42;
     for (let attempt = 0; attempt < 80; attempt++) {
       const out = [tonic];

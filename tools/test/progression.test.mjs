@@ -410,4 +410,25 @@ suite('progression: sequences', () => {
     ok(made >= 80, `exercised sequenceBody (${made})`);
     ok(byMode.major > 0 && byMode.minor > 0, 'both modes produce sequences');
   });
+
+  test('sequences surface in D3+ bodies but never below', () => {
+    // a descending-fifths signature: I->IV->viio6 (major) / i->iv->VII (minor) as a contiguous run
+    const sig = (syms, mode) => {
+      const run = mode === 'major' ? ['I', 'IV', 'viio6'] : ['i', 'iv', 'VII'];
+      for (let i = 0; i + run.length <= syms.length; i++) if (run.every((s, j) => syms[i + j] === s)) return true;
+      return false;
+    };
+    const rate = (d) => {
+      let hit = 0, n = 0;
+      for (let s = 0; s < 400; s++) {
+        const mode = s % 2 ? 'major' : 'minor';
+        const ch = P.generatePhrases(DS.rng.create(s * 5 + d * 31), { difficulty: d, mode, phrases: 2 });
+        n++; if (sig(ch.map((c) => c.sym), mode)) hit++;
+      }
+      return hit / n;
+    };
+    ok(rate(2) < 0.02, `no sequences below D3 (${rate(2).toFixed(3)})`);
+    ok(rate(3) > 0.06, `sequences appear at D3 (${rate(3).toFixed(3)})`);
+    ok(rate(4) > rate(3), `sequences more frequent at D4 (${rate(4).toFixed(3)} > ${rate(3).toFixed(3)})`);
+  });
 });
