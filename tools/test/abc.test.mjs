@@ -96,6 +96,28 @@ suite('abc: SATB + romans', () => {
     ok(abc.includes('w: I IV V7'), `romans lyrics:\n${abc}`);
   });
 
+  test('fermata sits above the soprano and inverted below the bass, not on inner voices', () => {
+    const F = { fermata: true };
+    const excerpt = {
+      kind: 'harmonic', source: 'test', key: C_MAJOR, sig: 0,
+      num: 4, den: 4, mlen: 192, upbeat: 0, tpq: 48,
+      voices: [
+        [N(2, 0, 4, 96), N(1, 0, 4, 96, F)], // S
+        [N(0, 0, 4, 96), N(6, 0, 3, 96, F)], // A
+        [N(4, 0, 3, 96), N(4, 0, 3, 96, F)], // T
+        [N(0, 0, 3, 96), N(4, 0, 2, 96, F)], // B
+      ],
+      romans: null, meta: {},
+    };
+    const abc = DS.abc.fromExcerpt(excerpt);
+    const line = (tag) => abc.split('\n').find((l) => l.startsWith(`[V:${tag}]`)) || '';
+    ok(line('S').includes('!fermata!'), `soprano fermata above:\n${abc}`);
+    ok(!line('S').includes('!invertedfermata!'), 'soprano is the upright fermata');
+    ok(line('B').includes('!invertedfermata!'), `bass fermata inverted below:\n${abc}`);
+    ok(!line('A').includes('fermata'), 'alto carries no fermata');
+    ok(!line('T').includes('fermata'), 'tenor carries no fermata');
+  });
+
   test('roman numerals align by tick; bass passing tone gets a skip syllable', () => {
     const excerpt = {
       kind: 'harmonic', source: 'test', key: C_MAJOR, sig: 0,

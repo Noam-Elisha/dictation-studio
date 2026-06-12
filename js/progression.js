@@ -440,9 +440,8 @@
   const MOD_W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
 
   // `count` non-adjacent phrase indices in [0, phrases) (so a freshly reached
-  // key always gets at least one phrase to settle before the next pivot).
-  // First-phrase modulation is allowed but disfavored — usually the home key
-  // is worth establishing before leaving it.
+  // key always gets at least one phrase to settle before the next pivot). Any
+  // phrase, including the first, is an equally good place to modulate.
   function pickModIndices(rng, phrases, count) {
     const sets = [];
     const rec = (start, chosen) => {
@@ -453,8 +452,7 @@
       }
     };
     rec(0, []);
-    if (!sets.length) return [];
-    return DS.rng.weighted(rng, sets.map((s) => [s, s.includes(0) ? 0.4 : 1]));
+    return sets.length ? DS.rng.pick(rng, sets) : [];
   }
 
   // One two-bar phrase that pivots from curKey into newKey and confirms it:
@@ -496,10 +494,7 @@
       let phraseChords = null;
 
       if (modAt.has(p)) {
-        let targets = modTargets(curKey);
-        // a modulation in the very first phrase leaves home barely stated, so
-        // skip the relative key (same signature) — it would be imperceptible
-        if (p === 0) targets = targets.filter((k) => T.fifths(k) !== T.fifths(key1));
+        const targets = modTargets(curKey);
         if (targets.length) {
           const newKey = DS.rng.weighted(rng, targets.map((t) => [t, MOD_W[t.label] || 0.5]));
           const dg2 = findPivot(curKey, newKey);
