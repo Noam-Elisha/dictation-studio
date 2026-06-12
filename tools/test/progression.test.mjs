@@ -281,6 +281,26 @@ suite('progression: colour vocabulary', () => {
   });
 });
 
+suite('progression: prolongation', () => {
+  test('expansion templates voice cleanly and emphasise non-tonic (PD) expansion', () => {
+    const PROLONG = P._PROLONG;
+    ok(PROLONG.major.PD.length >= 4 && PROLONG.major.D.length >= 1, 'PD emphasised, D present');
+    ok(PROLONG.minor.PD.length >= 2, 'minor PD present');
+    for (const mode of ['major', 'minor']) {
+      const key = mode === 'major' ? C_MAJOR : A_MINOR;
+      for (const fn of ['T', 'PD', 'D']) for (const chain of PROLONG[mode][fn]) {
+        const chords = chain.map((s) => P.chordSpec(s, mode));
+        let ok1 = false;
+        for (let seed = 0; seed < 6 && !ok1; seed++) {
+          const v = V.harmonize(DS.rng.create(seed), key, chords);
+          if (v && V.validate(key, chords, v).length === 0) ok1 = true;
+        }
+        ok(ok1, `${mode}/${fn} [${chain.join(' ')}] voices clean`);
+      }
+    }
+  });
+});
+
 suite('progression: rhythm invariants', () => {
   test('buildPhrase emits a fermata beat-stream — no whole notes, no barline crossings, cadence on a strong beat', () => {
     for (let s = 0; s < 600; s++) {

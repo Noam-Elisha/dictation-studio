@@ -391,6 +391,24 @@
   }
 
   // ---- single-phrase, beat-stream rhythm ----------------------------------
+  // ---- harmonic expansion (prolongation) ---------------------------------
+  // Expand one harmonic FUNCTION over time: a short sym-chain whose first and
+  // last chord keep the function, with subordinate (inner) chords on weak
+  // beats. This applies to EVERY function — predominant and dominant expansion
+  // matter as much as tonic. Every sym already exists in CAT[mode].
+  const PROLONG = {
+    major: {
+      T: [['I', 'viio6', 'I6'], ['I', 'V6', 'I'], ['I', 'V43', 'I6'], ['I6', 'V6', 'I'], ['I', 'IV', 'I'], ['I', 'I6']],
+      PD: [['IV', 'ii6'], ['ii', 'ii6'], ['IV', 'IV6', 'ii6'], ['IV', 'ii65'], ['ii6', 'ii65'], ['IV', 'ii']],
+      D: [['V', 'V7'], ['V6', 'V65']],
+    },
+    minor: {
+      T: [['i', 'viio6', 'i6'], ['i', 'V6', 'i'], ['i', 'iv', 'i'], ['i', 'i6']],
+      PD: [['iv', 'iio6'], ['iv', 'iv6', 'iio6'], ['iv', 'iiø65']],
+      D: [['V', 'V7']],
+    },
+  };
+
   // A seam over walkBody so later tasks can splice in prolongation / sequence
   // renderings of the body without touching buildPhrase. For now it is a thin
   // wrapper: a plain weighted walk from the tonic to a chord that can precede
@@ -745,6 +763,6 @@
 
   DS.progression = {
     generate, generatePhrases, generateModulating, closelyRelated, chordSpec, display,
-    _composeBody: composeBody, _buildPhrase: buildPhrase,
+    _composeBody: composeBody, _buildPhrase: buildPhrase, _PROLONG: PROLONG,
   };
 })();
