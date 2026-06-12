@@ -167,6 +167,39 @@ suite('voicing: harmonize', () => {
     ok(fails / total <= 0.16, `harmonize failure rate ${fails}/${total}`);
   });
 
+  // The soak above exercises the legacy generate(length:) path. This one covers
+  // the SHIPPED path — generatePhrases / generateModulating with the flexible
+  // beat-stream rhythm — exactly as excerpt.js drives it (modulating at D4+,
+  // falling back to generatePhrases). It is the guard for prolongation (T10)
+  // and sequences (T12), which add chords to this path only.
+  test('soak: the shipped generatePhrases/generateModulating path voices cleanly', () => {
+    let fails = 0, total = 0, violations = [];
+    for (let difficulty = 1; difficulty <= 5; difficulty++) {
+      const harmDiff = Math.min(4, difficulty);
+      const chromatic = difficulty >= 5;
+      for (const mode of ['major', 'minor']) {
+        const key = mode === 'major' ? C_MAJOR : A_MINOR;
+        for (let seed = 0; seed < 150; seed++) {
+          total++;
+          const rng = DS.rng.create(seed * 7 + difficulty * 1000 + (mode === 'minor' ? 500000 : 0));
+          const phrases = 2 + (seed % 3);
+          let chords = harmDiff >= 4
+            ? P.generateModulating(rng, { difficulty: harmDiff, mode, phrases, key1: key, chromatic })
+            : null;
+          if (!chords) chords = P.generatePhrases(rng, { difficulty: harmDiff, mode, phrases, chromatic });
+          const voices = V.harmonize(rng, key, chords);
+          if (!voices) { fails++; continue; }
+          const errs = V.validate(key, chords, voices);
+          if (errs.length) {
+            violations.push(`d${difficulty} ${mode} seed ${seed}: ${chords.map((c) => c.sym).join(' ')} :: ${errs[0]}`);
+          }
+        }
+      }
+    }
+    eq(violations.slice(0, 5), [], `violations (${violations.length}/${total})`);
+    ok(fails / total <= 0.16, `shipped-path failure rate ${fails}/${total}`);
+  });
+
   test('augmented-sixth #4 always rises a semitone to scale degree 5', () => {
     const AUG6 = new Set(['It6', 'Fr43', 'Ger65']);
     let checked = 0;
