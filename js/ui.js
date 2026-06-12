@@ -8,7 +8,7 @@
 
   let settings = null;
   let session = null;
-  let current = null; // {excerpt, settings, rebuild, historyId, revealed, peeked, studyVoices}
+  let current = null; // {excerpt, settings, rebuild, revealed, peeked, studyVoices}
 
   // ---------- helpers ----------
 
@@ -238,38 +238,6 @@
     });
   }
 
-  // ---------- presets ----------
-
-  function renderPresets() {
-    const sel = $('#sel-preset');
-    sel.innerHTML = DS.storage
-      .listPresets()
-      .map((p) => `<option value="${esc(p.name)}">${esc(p.name)}${p.builtin ? '' : ' ·'}</option>`)
-      .join('');
-  }
-
-  function wirePresets() {
-    $('#btn-apply-preset').addEventListener('click', () => {
-      const name = $('#sel-preset').value;
-      const preset = DS.storage.listPresets().find((p) => p.name === name);
-      if (!preset) return;
-      Object.assign(settings, preset.settings);
-      DS.storage.normalizeSettings(settings);
-      settingsToUI();
-      persist();
-      banner(`Preset “${name}” applied.`, false);
-    });
-    $('#btn-save-preset').addEventListener('click', () => {
-      const name = $('#inp-preset-name').value.trim();
-      if (!name) return banner('Give the preset a name first.');
-      DS.storage.savePreset(name, settings);
-      $('#inp-preset-name').value = '';
-      renderPresets();
-      $('#sel-preset').value = name;
-      banner(`Preset “${name}” saved.`, false);
-    });
-  }
-
   // ---------- givens ----------
 
   function excerptBars(ex) {
@@ -354,7 +322,7 @@
           <p class="hero-sub">Reveal when you're ready${info.stopped ? '' : ' — or play it once more'}.</p>`;
       case 'revealed':
         return `<div class="hero-state">Check your work.</div>
-          <p class="hero-sub">Compare against the engraving below, replay voices, then grade yourself.</p>`;
+          <p class="hero-sub">Compare against the engraving below and replay the voices.</p>`;
     }
     return '';
   }
@@ -441,7 +409,6 @@
 
     renderNotation();
     renderStudyControls();
-    renderGradeRow();
   }
 
   // Engrave at the container's real width so abcjs lays the music out at native
@@ -511,44 +478,6 @@
         persist();
         renderAnswer();
       });
-  }
-
-  function renderGradeRow() {
-    const el = $('#grade-row');
-    const grades = [
-      ['g-ok', 'Nailed it'],
-      ['g-close', 'Close'],
-      ['g-missed', 'Missed it'],
-    ];
-    el.innerHTML =
-      `<span class="grade-label">Self-grade</span>` +
-      grades.map(([cls, label], i) => `<button type="button" class="${cls}" data-grade="${i}">${label}</button>`).join('');
-    $$('#grade-row button').forEach((btn) =>
-      btn.addEventListener('click', () => {
-        const grade = Number(btn.dataset.grade);
-        DS.storage.updateHistory(current.historyId, { grade });
-        $$('#grade-row button').forEach((b) => b.classList.remove('chosen'));
-        btn.classList.add('chosen');
-        renderHistory();
-        renderStatsChip();
-      })
-    );
-  }
-
-  // ---------- history ----------
-  // The practice log was removed; history is still recorded so the masthead
-  // stats chip can summarise graded exercises.
-  function renderHistory() {}
-
-  function renderStatsChip() {
-    const stats = DS.storage.stats();
-    let n = 0;
-    let ok = 0;
-    for (const k of Object.keys(stats)) {
-      n += stats[k].n;
-      ok += stats[k].grades[0];
-    }
-    $('#stats-chip').textContent = n ? `${n} graded · ${Math.round((ok / n) * 100)}% nailed` : '';
   }
 
   // ---------- exercise lifecycle ----------
@@ -624,21 +553,6 @@
 
   function launch(excerpt, s, rebuild) {
     current = { excerpt, settings: s, rebuild, revealed: false, peeked: false, studyVoices: null };
-    current.historyId = Date.now() + Math.floor(Math.random() * 999);
-    DS.storage.pushHistory({
-      id: current.historyId,
-      ts: Date.now(),
-      settings: {
-        mode: s.mode, source: s.source, difficulty: s.difficulty, length: s.length,
-        harmonicPhrases: s.harmonicPhrases,
-        keyMode: s.keyMode, fixedKey: s.fixedKey, meter: s.meter, melodicVoice: s.melodicVoice,
-        transpose: s.transpose, pickup: s.pickup,
-      },
-      rebuild,
-      detail: detailFor(excerpt),
-      grade: null,
-    });
-    renderHistory();
     renderGivens();
     renderAnswerHidden();
     session.start(excerpt, s);
@@ -687,12 +601,8 @@
       buildFixedKeyOptions();
       settingsToUI();
       wireSettings();
-      renderPresets();
-      wirePresets();
       renderGivens();
       renderStage('idle');
-      renderHistory();
-      renderStatsChip();
       wireKeyboard();
 
       // Re-engrave the answer when the usable width changes (rotate, resize).
