@@ -109,8 +109,8 @@
       add('I', [['IV', 3], ['V', 2], ['V7', 1.2], ['I6', 1.5], ['vi', 0.8]]);
       add('I6', [['IV', 2.5], ['V', 2]]);
       add('IV', [['V', 2.5], ['V7', 1.5], ['I', 1], ['I6', 0.8]]);
-      add('V', [['I', 2.5], ['I6', 1.2], ['vi', 0.6]]);
-      add('V7', [['I', 2.5], ['vi', 0.5]]);
+      add('V', [['I', 2.5], ['I6', 1.2], ['vi', 0.85]]);
+      add('V7', [['I', 2.5], ['vi', 0.7]]);
       add('vi', [['IV', 2.5]]);
       if (difficulty >= 2) {
         add('I', [['ii6', 1.5], ['V65', 0.5]]);
@@ -135,9 +135,9 @@
         add('vi', [['ii6', 2], ['ii', 1], ['V', 0.6]]);
       }
       if (difficulty >= 3) {
-        add('I', [['iii', 0.4]]);
-        add('iii', [['IV', 1.5], ['vi', 1.2], ['ii6', 1.0], ['I6', 0.6]]);
-        add('vi', [['iii', 0.8]]);
+        add('I', [['iii', 0.9]]);
+        add('iii', [['IV', 1.3], ['vi', 1.8], ['ii6', 1.0], ['I6', 0.6]]);
+        add('vi', [['iii', 1.3]]);
         add('I', [['V7/IV', 1.5], ['V/V', 1.2], ['V7/V', 1.2], ['V/vi', 1.0], ['V7/vi', 0.9], ['V/ii', 0.7], ['V7/ii', 0.9], ['viio7/V', 0.8]]);
         add('I6', [['V/V', 1.1], ['V7/IV', 1.0], ['V7/vi', 0.6]]);
         add('IV', [['V/V', 1.0], ['V7/V', 0.8]]);
@@ -156,8 +156,8 @@
       add('i', [['iv', 3], ['V', 2], ['V7', 1.2], ['i6', 1.5], ['VI', 0.8]]);
       add('i6', [['iv', 2.5], ['V', 2]]);
       add('iv', [['V', 2.5], ['V7', 1.5], ['i', 1], ['i6', 0.8]]);
-      add('V', [['i', 2.5], ['i6', 1.2], ['VI', 0.6]]);
-      add('V7', [['i', 2.5], ['VI', 0.5]]);
+      add('V', [['i', 2.5], ['i6', 1.2], ['VI', 0.85]]);
+      add('V7', [['i', 2.5], ['VI', 0.7]]);
       add('VI', [['iv', 2.5]]);
       if (difficulty >= 2) {
         add('i', [['viio6', 0.5]]);
@@ -174,9 +174,9 @@
         add('V43', [['i', 1.5], ['i6', 2.5]]);
         add('V42', [['i6', 3]]);
         add('V', [['V42', 0.8]]);
-        add('i', [['VII', 1.2]]); // open the relative-major area more often
+        add('i', [['VII', 1.5]]); // open the relative-major area more often
         add('VII', [['III', 3]]);
-        add('III', [['iv', 1.5], ['iio6', 1], ['VI', 0.8], ['iv6', 0.6]]);
+        add('III', [['iv', 1.3], ['iio6', 1], ['VI', 1.3], ['iv6', 0.6]]);
         add('VI', [['iio6', 1.5], ['iiø65', 0.8]]);
         add('i', [['iv6', 0.4]]);
       }
@@ -532,19 +532,28 @@
   // each get a single voicing attempt, so "voices sometimes" isn't enough). If
   // the voicing engine isn't loaded (progression.js used standalone), fall back
   // to a grammar-only pass.
+  // Memoised: seqVoices is a pure function of (mode, frag) — fixed key and
+  // seeds — and only a few dozen distinct fragments ever occur, so without this
+  // the 8 voicing probes per call dominate the soak AND the app's per-exercise
+  // generation latency. Each distinct fragment is probed once, then free.
+  const seqVoicesCache = new Map();
   function seqVoices(mode, frag) {
     const voicing = DS.voicing;
     if (!voicing) return true; // standalone: no engine to check against
+    const ck = mode + '|' + frag.join(',');
+    if (seqVoicesCache.has(ck)) return seqVoicesCache.get(ck);
     const key = SEQ_KEY[mode];
     const cadTonic = mode === 'minor' ? 'i' : 'I';
     const syms = frag.concat(['V7', cadTonic]);
     const chords = syms.map((s) => chordSpec(s, mode));
     chords[chords.length - 1].sopranoEnd = [1];
-    for (let seed = 0; seed < 8; seed++) {
+    let voiceable = true;
+    for (let seed = 0; seed < 8 && voiceable; seed++) {
       const v = voicing.harmonize(DS.rng.create(seed * 101 + 7), key, chords);
-      if (!(v && voicing.validate(key, chords, v).length === 0)) return false;
+      if (!(v && voicing.validate(key, chords, v).length === 0)) voiceable = false;
     }
-    return true;
+    seqVoicesCache.set(ck, voiceable);
+    return voiceable;
   }
 
   // Build a `len`-long descending-fifths fragment from the tonic, or null if it
