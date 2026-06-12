@@ -54,10 +54,23 @@ suite('synth: event building (pure)', () => {
     const stretched = DS.synth.buildExcerptEvents(ex, { bpm: 60, honorFermatas: true });
     const plain = DS.synth.buildExcerptEvents(ex, { bpm: 60, honorFermatas: false });
     close(plain.totalSec, 2);
-    // a 48-tick fermata at 60bpm (1s) held 1.5x adds 0.5s -> total 2.5s
-    close(stretched.totalSec, 2.5);
+    // a 48-tick (quarter) cadence at 60bpm: held 1.5x (1s -> 1.5s) PLUS a 1s
+    // breath after a short cadence -> 1.5 + 1 (breath) + 1 (next chord) = 3.5s
+    close(stretched.totalSec, 3.5);
     const late = stretched.events.filter((e) => e.t > 1.4);
     eq(late.length, 4, 'second chord shifted in every voice');
+  });
+
+  test('a half-note cadence gets the fermata stretch but no extra breath', () => {
+    const ex = excerptOf([
+      [N(2, 0, 5, 96, { fermata: true }), N(0, 0, 5, 48)],
+      [N(4, 0, 4, 96, { fermata: true }), N(4, 0, 4, 48)],
+      [N(0, 0, 4, 96, { fermata: true }), N(2, 0, 4, 48)],
+      [N(0, 0, 3, 96, { fermata: true }), N(0, 0, 3, 48)],
+    ]);
+    const stretched = DS.synth.buildExcerptEvents(ex, { bpm: 60, honorFermatas: true });
+    // 96-tick (half) fermata held 1.5x (2s -> 3s) + 48-tick chord (1s), NO breath = 4s
+    close(stretched.totalSec, 4);
   });
 
   test('voicesPlayed filter and voice tagging', () => {

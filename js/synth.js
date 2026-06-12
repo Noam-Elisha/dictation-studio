@@ -9,28 +9,34 @@
 
   // ---- pure: timeline building --------------------------------------------
 
-  // Fermata intervals from the first voice (chorale fermatas are aligned).
+  // Fermata intervals from the first voice (chorale fermatas are aligned). Each
+  // span carries the cadence note's duration so playback can give short (quarter-
+  // note) cadences an extra breath before the next phrase's pickup.
   function fermataSpans(excerpt) {
     const spans = [];
     let tick = 0;
     for (const n of excerpt.voices[0]) {
-      if (n.fermata) spans.push([tick, tick + n.dur]);
+      if (n.fermata) spans.push([tick, tick + n.dur, n.dur]);
       tick += n.dur;
     }
     return spans;
   }
 
   // Map a tick to seconds, stretching fermata spans by FERMATA_MUL. A held
-  // chorale fermata reads clearly at 1.5x; a full 2x dragged too much.
+  // chorale fermata reads clearly at 1.5x; a full 2x dragged too much. A
+  // quarter-note cadence (beat-3, with a pickup into the next phrase) also gets
+  // an added rest after it so the phrase break still breathes.
   const FERMATA_MUL = 1.5;
+  const SHORT_FERMATA_GAP = 48; // ticks of extra silence after a quarter-note cadence
   function tickClock(excerpt, bpm, honorFermatas) {
     const secPerTick = 60 / bpm / 48;
     const spans = honorFermatas ? fermataSpans(excerpt) : [];
     return function secAt(tick) {
       let sec = tick * secPerTick;
-      for (const [a, b] of spans) {
+      for (const [a, b, dur] of spans) {
         const overlap = Math.max(0, Math.min(tick, b) - a);
         sec += overlap * secPerTick * (FERMATA_MUL - 1);
+        if (dur <= 48 && tick >= b) sec += SHORT_FERMATA_GAP * secPerTick; // breath after a short cadence
       }
       return sec;
     };

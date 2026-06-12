@@ -453,13 +453,17 @@
         const cur = out[out.length - 1];
         const remaining = len - out.length;
         // Try a prolongation chain that expands the current chord's function.
-        if (!RESOLUTION[cur] && rng() < pProlong) {
-          const fn = CAT[mode][cur].fn;
+        // Predominant and dominant areas prolong more readily than the tonic
+        // (fnBoost) and prefer the longer, more audible expansions, so PD/D
+        // expansion actually surfaces rather than hiding behind the tonic's.
+        const fn = CAT[mode][cur].fn;
+        const fnBoost = fn === 'PD' ? 1.9 : fn === 'D' ? 1.4 : 1.0;
+        if (!RESOLUTION[cur] && rng() < pProlong * fnBoost) {
           const pool = (PROLONG[mode][fn] || []).filter(
             (chain) => chain[0] === cur && chain.length - 1 <= remaining && chain.length >= 2
           );
           if (pool.length) {
-            const chain = DS.rng.pick(rng, pool);
+            const chain = DS.rng.weighted(rng, pool.map((c) => [c, c.length - 1]));
             for (let k = 1; k < chain.length; k++) out.push(chain[k]);
             continue; // walk resumes from the chain's last chord
           }
@@ -496,7 +500,11 @@
   // voiceability; ii6 / iio6 likewise sit in first inversion, the idiomatic
   // pre-dominant shape. Three rendering modes colour the same skeleton.
   const SEQ_ORDER = {
-    major: ['I', 'IV', 'viio6', 'iii', 'vi', 'ii6', 'V'],
+    // Major avoids the diatonic vii°6 -> iii step (it leaves the leading tone
+    // unresolved — a no-no in strict writing): use the clean iii - vi - ii6 - V
+    // descending-fifths tail, opened on the tonic. Minor's VII is a real major
+    // chord, so its full diatonic circle of fifths is fine.
+    major: ['I', 'iii', 'vi', 'ii6', 'V'],
     minor: ['i', 'iv', 'VII', 'III', 'VI', 'iio6', 'V'],
   };
   // First-inversion substitutions that exist in the catalogue (smooth-bass
@@ -511,7 +519,7 @@
   // resolves immediately into the target it precedes, which RESOLUTION confirms.
   // Keyed by the chain target sym -> the applied-dominant sym to insert.
   const SEQ_APPLIED = {
-    major: { IV: 'V7/IV', vi: 'V7/vi', ii6: 'V/ii', V: 'V/V' },
+    major: { vi: 'V7/vi', ii6: 'V/ii', V: 'V/V' },
     minor: { iv: 'V7/iv', V: 'V/V' },
   };
   // Canonical keys used to voice-check sequence fragments. The voicing engine is
@@ -658,12 +666,22 @@
     return durs;
   }
 
+  // The cadence note value follows the beat it lands on (chorale convention):
+  //  - a downbeat (beat 1) cadence is a HALF note (it fills beats 1-2);
+  //  - a beat-3 cadence is a half note, OR a quarter with a pickup into the
+  //    next phrase (so the next phrase begins on beat 4).
+  // The piece's final cadence is always a half note (nothing picks up after it).
+  function cadenceDur(rng, cadStart, isFinal) {
+    const phase = ((cadStart % BAR) + BAR) % BAR;
+    if (phase === 0) return 2 * TPQ; // beat 1 -> half
+    return isFinal || rng() < 0.5 ? 2 * TPQ : TPQ; // beat 3 -> half, or quarter + pickup
+  }
+
   // Build one self-contained phrase as a beat-stream of quarters (with one
   // possible half to align the cadence) ending in a fermata-bearing cadence
   // chord. `beatBudget` is the rough chord count; `cadenceClass` steers the
   // cadence ('authentic' for a final phrase, 'open' for an internal one).
-  // `isFinal` makes the closing chord a half note (the piece's last sound);
-  // otherwise it is a quarter so the next phrase picks up on the next beat.
+  // The closing chord's note value follows its landing beat (see cadenceDur).
   function buildPhrase(rng, { mode, difficulty, startPhase, beatBudget, cadenceClass, chromatic, isFinal }) {
     difficulty = Math.min(4, Math.max(1, difficulty || 1));
     const t = table(difficulty, mode);
@@ -671,7 +689,6 @@
     // a phrase needs at least one body chord plus the shortest cadence (2 chords)
     const budget = Math.max(3, beatBudget | 0);
     startPhase = ((startPhase | 0) % BAR + BAR) % BAR;
-    const finalDur = isFinal ? 2 * TPQ : TPQ;
 
     for (let attempt = 0; attempt < 40; attempt++) {
       // cap the cadence so at least one body chord remains, but never below the
@@ -683,7 +700,10 @@
       const body = composeBody(rng, t, bodyLen, cadence.syms[0], mode, difficulty, chromatic);
       if (!body) continue;
       const syms = body.concat(cadence.syms);
-      const durs = assignBeatStream(syms.length, startPhase, finalDur);
+      const durs = assignBeatStream(syms.length, startPhase, TPQ);
+      let cadStart = startPhase;
+      for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
+      durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
       const chords = syms.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
       const last = chords[chords.length - 1];
       last.fermata = true;
@@ -699,7 +719,10 @@
     while (syms.length < budget - 3) syms.push(syms.length % 2 ? base[1] : tonic);
     const all = syms.concat(base.slice(1)).slice(0, budget);
     while (all.length < budget) all.splice(all.length - 1, 0, tonic);
-    const durs = assignBeatStream(all.length, startPhase, finalDur);
+    const durs = assignBeatStream(all.length, startPhase, TPQ);
+    let cadStart = startPhase;
+    for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
+    durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
     const chords = all.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
     const last = chords[chords.length - 1];
     last.fermata = true;
@@ -728,7 +751,7 @@
       // Internal phrases run a 5–9 beat budget (5 + rngInt(0..4)) for phrase-
       // length variety. The soprano-leap soak (voicing.test.mjs) is normalised
       // per leap rather than per phrase, so longer phrases don't trip it.
-      const beatBudget = 5 + Math.floor(rng() * 5);
+      const beatBudget = 7 + Math.floor(rng() * 2);
       const ph = buildPhrase(rng, {
         mode, difficulty, startPhase: phase, beatBudget,
         cadenceClass: 'open', chromatic, isFinal: false,
@@ -747,7 +770,7 @@
     const baseLen = all.length;
     const baseTotal = all.reduce((a, c) => a + c.dur, 0);
     const basePhase = baseTotal % BAR;
-    const baseBudget = 5 + Math.floor(rng() * 5);
+    const baseBudget = 7 + Math.floor(rng() * 2);
     const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
     let chosen = null;
     for (const off of offsets) {
@@ -849,18 +872,27 @@
   // half if needed to land the cadence on a strong beat — never crosses a
   // barline). The closing tonic bears the fermata (a half if `isFinal`, else a
   // quarter so the next phrase picks up on the next beat).
-  function modPhrase(curKey, newKey, dg2, startPhase, isFinal) {
+  function modPhrase(rng, curKey, newKey, dg2, startPhase, isFinal) {
     const tonicC = curKey.mode === 'minor' ? 'i' : 'I';
     const tonicN = newKey.mode === 'minor' ? 'i' : 'I';
+    const preN = newKey.mode === 'minor' ? 'iio6' : 'ii6';
+    const cad64N = newKey.mode === 'minor' ? 'i64c' : 'I64c';
+    const pivot = pivotSym(newKey.mode, dg2);
     const label = T.name(newKey.tonic).replace('#', '♯').replace('b', '♭') + ':';
-    const durs = assignBeatStream(4, startPhase, isFinal ? 2 * TPQ : TPQ);
+    // establish the current key (tonic), pivot into the new key (the common
+    // chord carries the key-change label), then a full new-key cadence so the
+    // phrase reaches ~2 bars: predominant - cadential 6/4 - V7 - tonic.
+    const cells = [[tonicC, curKey, {}], [pivot, newKey, { keyChange: label }]];
+    if (preN !== pivot) cells.push([preN, newKey, {}]);
+    cells.push([cad64N, newKey, {}], ['V7', newKey, {}], [tonicN, newKey, { sopranoEnd: [1] }]);
+    const durs = assignBeatStream(cells.length, startPhase, TPQ);
+    let cadStart = startPhase;
+    for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
+    durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
     const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
-    return [
-      mk(tonicC, curKey, durs[0]),
-      mk(pivotSym(newKey.mode, dg2), newKey, durs[1], { keyChange: label }),
-      mk('V7', newKey, durs[2]),
-      mk(tonicN, newKey, durs[3], { sopranoEnd: [1], fermata: true }),
-    ];
+    const out = cells.map(([sym, key, extra], i) => mk(sym, key, durs[i], extra));
+    out[out.length - 1].fermata = true;
+    return out;
   }
 
   // A multi-phrase progression with a progressive tonal plan: it may modulate
@@ -908,7 +940,7 @@
           const newKey = DS.rng.weighted(rng, targets.map((t) => [t, MOD_W[t.label] || 0.5]));
           const dg2 = findPivot(curKey, newKey);
           if (dg2 != null) {
-            phraseChords = modPhrase(curKey, newKey, dg2, phase, false);
+            phraseChords = modPhrase(rng, curKey, newKey, dg2, phase, false);
             curKey = newKey;
             path.push({ tonic: newKey.tonic, mode: newKey.mode });
             modulated = true;
@@ -919,7 +951,7 @@
       if (!phraseChords) {
         phraseChords = buildPhrase(rng, {
           mode: curKey.mode, difficulty, startPhase: phase,
-          beatBudget: 5 + Math.floor(rng() * 5), cadenceClass: 'open', chromatic, isFinal: false,
+          beatBudget: 7 + Math.floor(rng() * 2), cadenceClass: 'open', chromatic, isFinal: false,
         });
         for (const c of phraseChords) c.key = curKey;
       }
@@ -938,7 +970,7 @@
     const baseLen = all.length;
     const baseTotal = all.reduce((a, c) => a + c.dur, 0);
     const basePhase = baseTotal % BAR;
-    const baseBudget = 5 + Math.floor(rng() * 5);
+    const baseBudget = 7 + Math.floor(rng() * 2);
     const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
     let chosen = null;
     for (const off of offsets) {

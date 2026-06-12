@@ -389,6 +389,28 @@ suite('progression: rhythm invariants', () => {
     }
     ok(made >= 150, `exercised modulating pieces (${made})`);
   });
+
+  test('cadence note value follows the landing beat; phrases run ~2 measures', () => {
+    let badCad = 0, totalBeats = 0, nPhrases = 0, short = 0;
+    for (let d = 1; d <= 4; d++) for (let s = 0; s < 200; s++) {
+      const mode = s % 2 ? 'major' : 'minor';
+      const all = P.generatePhrases(DS.rng.create(s * 7 + d * 131), { difficulty: d, mode, phrases: 2 + (s % 3) });
+      const st = startTicks(all);
+      let prevEnd = 0;
+      for (const e of all.phraseEnds) {
+        nPhrases++;
+        const phase = st[e] % BAR, dur = all[e].dur;
+        if (phase === 0) { if (dur !== 96) badCad++; }                  // beat 1 -> half
+        else if (phase === 96) { if (dur !== 96 && dur !== 48) badCad++; } // beat 3 -> half or quarter
+        else badCad++;                                                  // never off a strong beat
+        const beats = (st[e] + dur - prevEnd) / TPQ; prevEnd = st[e] + dur;
+        totalBeats += beats; if (beats < 6) short++;
+      }
+    }
+    eq(badCad, 0, 'every cadence is on a strong beat with the right note value (beat 1 -> half, beat 3 -> half/quarter)');
+    ok(totalBeats / nPhrases >= 7, `phrases average ~2 measures (${(totalBeats / nPhrases).toFixed(1)} beats)`);
+    ok(short / nPhrases < 0.1, `few phrases shorter than 1.5 measures (${(100 * short / nPhrases).toFixed(0)}%)`);
+  });
 });
 
 suite('progression: sequences', () => {
@@ -414,7 +436,7 @@ suite('progression: sequences', () => {
   test('sequences surface in D3+ bodies but never below', () => {
     // a descending-fifths signature: I->IV->viio6 (major) / i->iv->VII (minor) as a contiguous run
     const sig = (syms, mode) => {
-      const run = mode === 'major' ? ['I', 'IV', 'viio6'] : ['i', 'iv', 'VII'];
+      const run = mode === 'major' ? ['I', 'iii', 'vi'] : ['i', 'iv', 'VII'];
       for (let i = 0; i + run.length <= syms.length; i++) if (run.every((s, j) => syms[i + j] === s)) return true;
       return false;
     };
