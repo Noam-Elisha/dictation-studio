@@ -357,6 +357,39 @@
     // difficulty 5's dense texture leaves many re-struck common tones; tie a
     // run of repeated same-pitch notes into one held note so it reads less busy
     if (difficulty >= 5) tieRepeats(voices);
+    ensureBeatOnsets(voices, total);
+    return voices;
+  }
+
+  // Keep a pulse: every beat needs someone striking a fresh note. If all the
+  // voices that begin a note on the beat are tied into it (and none is struck),
+  // break one tie — preferring the bass — so that voice re-articulates, even if
+  // it just repeats its note. A beat held by genuinely long notes (a half-note
+  // chord, no ties) is left alone.
+  function ensureBeatOnsets(voices, total) {
+    const startAt = voices.map((notes) => {
+      const m = new Map();
+      let t = 0;
+      for (let i = 0; i < notes.length; i++) { m.set(t, i); t += notes[i].dur; }
+      return m;
+    });
+    for (let bt = 0; bt < total; bt += 48) {
+      let struck = false;
+      const tied = [];
+      for (let v = 0; v < 4; v++) {
+        const idx = startAt[v].get(bt);
+        if (idx == null) continue; // a long note spans the beat — no onset here
+        const n = voices[v][idx];
+        if (n.step < 0) continue;
+        if (!n.tieEnd) { struck = true; break; }
+        tied.push({ v, idx });
+      }
+      if (struck || !tied.length) continue;
+      tied.sort((a, b) => b.v - a.v); // bass first, then tenor, alto, soprano
+      const { v, idx } = tied[0];
+      voices[v][idx].tieEnd = false;
+      if (idx > 0) voices[v][idx - 1].tieStart = false;
+    }
     return voices;
   }
 

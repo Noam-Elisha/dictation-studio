@@ -279,6 +279,35 @@ suite('nct: embellishment', () => {
     }
   });
 
+  test('every beat keeps an articulation — no beat is held by ties alone', () => {
+    for (let difficulty = 4; difficulty <= 5; difficulty++) {
+      for (let seed = 0; seed < 200; seed++) {
+        const key = seed % 2 ? C_MAJOR : A_MINOR;
+        const rng = DS.rng.create(seed * 7 + 5);
+        const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+        const block = DS.voicing.harmonize(rng, key, chords);
+        if (!block) continue;
+        const voices = DS.nct.assemble(rng, key, chords, block, { difficulty });
+        const total = chords.reduce((s, c) => s + c.dur, 0);
+        const startAt = voices.map((notes) => {
+          const m = new Map();
+          let t = 0;
+          for (const n of notes) { m.set(t, n); t += n.dur; }
+          return m;
+        });
+        for (let bt = 0; bt < total; bt += 48) {
+          let fresh = 0, tied = 0;
+          for (let v = 0; v < 4; v++) {
+            const n = startAt[v].get(bt);
+            if (!n || n.step < 0) continue;
+            if (n.tieEnd) tied++; else fresh++;
+          }
+          ok(!(tied > 0 && fresh === 0), `d${difficulty} seed ${seed}: beat ${bt} held only by ties`);
+        }
+      }
+    }
+  });
+
   test('difficulty 5 favours suspensions over anticipations', () => {
     const pc = (m) => ((m % 12) + 12) % 12;
     let anticipations = 0, suspensions = 0;
