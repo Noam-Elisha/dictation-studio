@@ -227,8 +227,11 @@
     { syms: ['Fr43', 'V'], type: 'HC', minD: 4 },
     { syms: ['Ger65', 'I64c', 'V'], type: 'HC', minD: 4 },
     { syms: ['V7/V', 'V'], type: 'HC', minD: 3 },
+    { syms: ['IV', 'I'], type: 'PC', minD: 2 },          // plagal
+    { syms: ['ii6', 'V', 'vi'], type: 'DC', minD: 3 },   // extra deceptive
+    { syms: ['IV', 'V', 'vi'], type: 'DC', minD: 2 },
   ];
-  const CADENCE_WEIGHT = { PAC: 4.5, IAC: 1.2, HC: 2.2, DC: 1.2, PHC: 1.0 };
+  const CADENCE_WEIGHT = { PAC: 4.5, IAC: 1.2, HC: 2.2, DC: 1.2, PHC: 1.0, PC: 1.0 };
 
   function minorize(syms) {
     const map = { I: 'i', I6: 'i6', I64c: 'i64c', IV: 'iv', ii6: 'iio6', ii65: 'iiø65', vi: 'VI' };
@@ -247,7 +250,7 @@
     // cadences (N6, augmented sixths, Phrygian) actually surface at D3-D4.
     const weighted = pool.map((c) => {
       let w = (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD);
-      if (cadenceClass === 'open') w *= c.type === 'HC' || c.type === 'PHC' ? 3 : c.type === 'DC' ? 1.3 : 0.6;
+      if (cadenceClass === 'open') w *= (c.type === 'HC' || c.type === 'PHC' || c.type === 'PC') ? 3 : c.type === 'DC' ? 1.5 : 0.3;
       // augmented sixths and the Neapolitan are striking — keep them a bit
       // rarer, except at difficulty 5 which leans into the chromaticism
       if (!chromatic && c.syms.some((s) => s === 'N6' || s === 'It6' || s === 'Fr43' || s === 'Ger65')) w *= 0.6;

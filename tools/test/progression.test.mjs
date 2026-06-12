@@ -229,6 +229,18 @@ suite('progression: modulation', () => {
   });
 });
 
+suite('progression: cadence variety', () => {
+  test('internal (open) phrases are mostly non-PAC', () => {
+    let pac = 0, n = 0;
+    for (let s = 0; s < 800; s++) {
+      const d = 2 + (s % 3);
+      const ch = P.generate(DS.rng.create(s + d * 1000), { difficulty: d, mode: s % 2 ? 'major' : 'minor', bars: 2, cadenceClass: 'open' });
+      n++; if (ch.cadence === 'PAC') pac++;
+    }
+    ok(pac / n < 0.4, `open-phrase PAC share ${(pac / n).toFixed(2)} should be < 0.40`);
+  });
+});
+
 suite('progression: colour vocabulary', () => {
   test('iii exists in major, is a minor triad on degree 3, voices in context', () => {
     const iii = P.chordSpec('iii', 'major');
