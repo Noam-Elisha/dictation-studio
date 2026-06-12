@@ -116,11 +116,12 @@ function analyzeGen() {
   const freq = {}, bigram = {}, rootMove = {}, cad = {}, chrSym = {};
   let total = 0;
   const degPc = (key, deg) => pc(T.degreeNote(key, deg, 0).step, T.degreeNote(key, deg, 0).alter);
-  for (let difficulty = 2; difficulty <= 4; difficulty++) {
+  // sample D2-D4 plus the chromatic (UI D5) path, mirroring excerpt.js
+  for (const [difficulty, chromatic] of [[2, false], [3, false], [4, false], [4, true]]) {
     for (let seed = 0; seed < 1500; seed++) {
       const mode = seed % 2 ? 'major' : 'minor';
       const key = { tonic: mode === 'major' ? { step: 0, alter: 0 } : { step: 5, alter: 0 }, mode };
-      const chords = DS.progression.generatePhrases(DS.rng.create(seed * 7 + difficulty * 13), { difficulty, mode, phrases: 2 });
+      const chords = DS.progression.generatePhrases(DS.rng.create(seed * 7 + difficulty * 13 + (chromatic ? 99991 : 0)), { difficulty, mode, phrases: 2, chromatic });
       const ends = new Set(chords.phraseEnds);
       for (const c of chords) if (genLabel(c.sym, mode) === 'chr') chrSym[c.sym] = (chrSym[c.sym] || 0) + 1;
       const raw = chords.map((c, i) => ({ lab: genLabel(c.sym, mode), root: rootPc(key, c), fermata: ends.has(i) }));
