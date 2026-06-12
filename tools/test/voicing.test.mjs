@@ -198,4 +198,34 @@ suite('voicing: harmonize', () => {
     const errs = V.validate(C_MAJOR, [It6, Vc], voices);
     ok(errs.some((e) => /augmented-sixth/.test(e)), `expected a #4-rise violation, got: ${errs.join('; ')}`);
   });
+
+  test('phrase soprano lines sing — leaps are recovered, never run the same way', () => {
+    let phrases = 0, unrec = 0, sameWay = 0;
+    for (let difficulty = 2; difficulty <= 4; difficulty++) {
+      for (let seed = 0; seed < 150; seed++) {
+        const key = seed % 2 ? C_MAJOR : A_MINOR;
+        const rng = DS.rng.create(seed * 7 + difficulty * 101);
+        const chords = P.generatePhrases(rng, { difficulty, mode: key.mode, phrases: 3 });
+        const block = V.harmonize(rng, key, chords);
+        if (!block) continue;
+        let start = 0;
+        for (const e of chords.phraseEnds) {
+          const line = [];
+          for (let i = start; i <= e; i++) line.push(T.midi(block[i][0]));
+          start = e + 1;
+          phrases++;
+          const iv = [];
+          for (let i = 1; i < line.length; i++) iv.push(line[i] - line[i - 1]);
+          for (let i = 0; i < iv.length; i++) {
+            const a = iv[i], b = iv[i + 1];
+            if (Math.abs(a) <= 2 || b == null) continue;
+            if (!(Math.sign(b) === -Math.sign(a) && Math.abs(b) <= 2)) unrec++;
+            if (Math.abs(b) > 2 && Math.sign(b) === Math.sign(a)) sameWay++;
+          }
+        }
+      }
+    }
+    ok(unrec / phrases < 0.23, `leaps are mostly recovered by a contrary step (${(unrec / phrases).toFixed(3)}/phrase)`);
+    ok(sameWay / phrases < 0.013, `no run of two same-direction leaps (${(sameWay / phrases).toFixed(3)}/phrase)`);
+  });
 });

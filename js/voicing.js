@@ -338,6 +338,37 @@
     return 6;
   }
 
+  // Fux-style melodic quality of one phrase's soprano line (a penalty, 0 = ideal):
+  // leaps should be recovered by a contrary step, no two leaps run the same way,
+  // a single clear high point, and a singable range. Applied at each phrase end
+  // so the search prefers harmonisations whose top line actually sings.
+  function sopranoPenalty(line) {
+    if (line.length < 3)
+      return line.length === 2 && Math.abs(line[1] - line[0]) >= 7 ? 0.6 : 0;
+    let p = 0;
+    const iv = [];
+    for (let i = 1; i < line.length; i++) iv.push(line[i] - line[i - 1]);
+    for (let i = 0; i < iv.length; i++) {
+      const a = iv[i];
+      if (Math.abs(a) <= 2) continue; // a step is always fine
+      const b = iv[i + 1];
+      if (b == null) { if (Math.abs(a) > 4) p += 0.7; continue; } // leap on the last note
+      const recovered = Math.sign(b) === -Math.sign(a) && Math.abs(b) <= 2;
+      if (!recovered) p += Math.abs(a) > 4 ? 1.1 : 0.5; // leap not answered by a contrary step
+      if (Math.abs(b) > 2 && Math.sign(b) === Math.sign(a)) p += 1.2; // two leaps the same way
+      if (Math.abs(a) >= 7) p += 0.5; // an octave-or-wider leap
+    }
+    const hi = Math.max(...line), lo = Math.min(...line);
+    const topCount = line.filter((m) => m === hi).length;
+    if (topCount > 1) p += 0.45 * (topCount - 1); // the climax should be a single note
+    let peaks = 0;
+    for (let i = 1; i < line.length - 1; i++)
+      if (line[i] > line[i - 1] && line[i] >= line[i + 1]) peaks++;
+    if (peaks > 1) p += 0.45 * (peaks - 1); // a wandering, many-humped contour
+    if (hi - lo > 16) p += (hi - lo - 16) * 0.12; // wider than a tenth
+    return p;
+  }
+
   // ---- beam search ---------------------------------------------------------
 
   // Keep the beam diverse in soprano pitch class so a final soprano
@@ -383,6 +414,15 @@
     });
     if (candLists.some((l) => l.length === 0)) return null;
 
+    // map each phrase-ending chord index to where its phrase began, so the
+    // soprano line of a phrase can be scored the moment it closes
+    const SOPRANO_W = 1.4;
+    const phraseStart = new Map();
+    {
+      let ps = 0;
+      for (const e of chords.phraseEnds || [chords.length - 1]) { phraseStart.set(e, ps); ps = e + 1; }
+    }
+
     let beam = prune(
       candLists[0].map((c) => ({
         cand: c,
@@ -407,6 +447,17 @@
         }
       }
       if (!next.length) return null;
+      // when a phrase closes, charge each candidate for its soprano line's shape
+      if (phraseStart.has(i)) {
+        const start = phraseStart.get(i);
+        for (const st of next) {
+          const line = [];
+          let s = st;
+          for (let k = i; k >= start && s; k--) { line.push(s.cand.midis[0]); s = s.parent; }
+          line.reverse();
+          st.cost += SOPRANO_W * sopranoPenalty(line);
+        }
+      }
       beam = prune(next, K);
     }
 
