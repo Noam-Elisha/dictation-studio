@@ -1,8 +1,9 @@
 import { loadDS, suite, test, eq, ok } from './harness.mjs';
 
-const DS = loadDS(['js/rng.js', 'js/theory.js', 'js/progression.js']);
+const DS = loadDS(['js/rng.js', 'js/theory.js', 'js/progression.js', 'js/voicing.js']);
 const P = DS.progression;
 const T = DS.theory;
+const V = DS.voicing;
 
 const D1_MAJOR = new Set(['I', 'I6', 'IV', 'V', 'V7', 'vi', 'I64c']);
 const D1_MINOR = new Set(['i', 'i6', 'iv', 'V', 'V7', 'VI', 'i64c']);
@@ -225,5 +226,18 @@ suite('progression: modulation', () => {
     const a = P.generateModulating(DS.rng.create(42), { ...opts });
     const b = P.generateModulating(DS.rng.create(42), { ...opts });
     eq(a, b);
+  });
+});
+
+suite('progression: colour vocabulary', () => {
+  test('iii exists in major, is a minor triad on degree 3, voices in context', () => {
+    const iii = P.chordSpec('iii', 'major');
+    eq(iii.tones, [[3, 0], [5, 0], [7, 0]]);
+    eq(iii.lt, null);                 // degree 7 is the chordal fifth, not a tendency tone
+    const chords = ['I', 'iii', 'vi', 'IV', 'V', 'I'].map((s) => P.chordSpec(s, 'major'));
+    chords[chords.length - 1].sopranoEnd = [1];
+    const voices = V.harmonize(DS.rng.create(7), C_MAJOR, chords);
+    ok(voices, 'harmonized a progression containing iii');
+    eq(V.validate(C_MAJOR, chords, voices), [], 'no voice-leading violations');
   });
 });
