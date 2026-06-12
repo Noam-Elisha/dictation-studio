@@ -162,6 +162,40 @@ suite('nct: embellishment', () => {
     ok(d[3] >= 0.4, `d4 rich but not saturated (${d[3].toFixed(2)})`);
   });
 
+  test('anticipations are present and far outnumber escapes', () => {
+    const pc = (m) => ((m % 12) + 12) % 12;
+    let anticipations = 0, escapes = 0;
+    for (let seed = 0; seed < 600; seed++) {
+      const key = seed % 2 ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 9 + 4);
+      const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+      const block = DS.voicing.harmonize(rng, key, chords);
+      if (!block) continue;
+      const starts = [], durs = chords.map((c) => c.dur);
+      let a = 0;
+      for (const c of chords) { starts.push(a); a += c.dur; }
+      const ac = (t) => { for (let i = 0; i < starts.length; i++) if (t >= starts[i] && t < starts[i] + durs[i]) return i; return starts.length - 1; };
+      const cps = block.map((ch) => new Set(ch.map((p) => pc(T.midi(p)))));
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 4 });
+      for (let v = 0; v < 4; v++) {
+        const ns = voices[v];
+        let t = 0;
+        for (let i = 0; i < ns.length; i++) {
+          const n = ns[i];
+          if (n.dur <= 24 && !cps[ac(t)].has(pc(T.midi(n)))) {
+            const prev = ns[i - 1], next = ns[i + 1];
+            const cm = T.midi(n), pm = prev && T.midi(prev), nm = next && T.midi(next);
+            if (next && nm === cm) anticipations++; // sounded early, left by repetition
+            else if (prev && Math.abs(cm - pm) <= 2 && next && Math.abs(nm - cm) > 2) escapes++;
+          }
+          t += n.dur;
+        }
+      }
+    }
+    ok(anticipations > 200, `expected many anticipations, saw ${anticipations}`);
+    ok(anticipations > escapes * 3, `anticipations (${anticipations}) should dwarf escapes (${escapes})`);
+  });
+
   test('bass is embellished sometimes (passing tones in the bass)', () => {
     let bassExtra = 0;
     for (let seed = 0; seed < 300; seed++) {

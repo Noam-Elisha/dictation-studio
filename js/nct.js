@@ -83,9 +83,10 @@
       out.push({ type: 'lower neighbor', pitch: diatonicStep(key, p1, -1) });
       if (adv) out.push({ type: 'chromatic neighbor', pitch: chromaticHalf(p1, -1) });
     } else if (Math.abs(iv.d) === 1 && Math.abs(iv.s) <= 2 && adv) {
-      // a plain whole/half step: deliberately NOT a chromatic fill (that's lazy
-      // and cross-relation-prone). An échappée is the only option here, and it
-      // is kept rare in assemble().
+      // a plain step: prefer an anticipation — sound the next chord tone early
+      // (approached by step, left by repetition); the échappée stays as a rare
+      // alternative (assemble() weights anticipation far higher).
+      out.push({ type: 'anticipation', pitch: { step: p2.step, alter: p2.alter, oct: p2.oct } });
       out.push({ type: 'escape', pitch: diatonicStep(key, p1, -Math.sign(iv.d)) });
     }
     return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
@@ -259,7 +260,9 @@
         let chosen = null;
         let kind = 'off';
         if (wantOn) {
-          const cands = onbeatCandidates(key, p1, p2, difficulty).filter((c) =>
+          // an on-beat figure sounds on chord i+1's downbeat, so spell it in
+          // that chord's key (matters once a phrase has modulated)
+          const cands = onbeatCandidates(chords[i + 1].key || key, p1, p2, difficulty).filter((c) =>
             // check both the approach (p1->figure) and resolution (figure->p2)
             pitchOK(c.pitch, block[i + 1].map((p) => T.midi(p)), v, [p1, p2])
           );
@@ -272,18 +275,27 @@
           // a quarter chord has room for only one figure; don't add an off-beat
           // tail to a chord that already carries an on-beat figure
           if (on[v].has(i)) continue;
-          const cands = offbeatCandidates(key, p1, p2, difficulty).filter((c) =>
+          // an off-beat figure sounds within chord i's span, so spell it in
+          // that chord's key (matters once a phrase has modulated)
+          let cands = offbeatCandidates(chords[i].key || key, p1, p2, difficulty).filter((c) =>
             pitchOK(c.pitch, held, v, [p1, p2])
           );
           if (!cands.length) continue;
-          // échappées are peripheral; usually leave a plain step unembellished
-          if (cands.every((c) => c.type === 'escape') && rng() > 0.3) continue;
           // neighbor tones (on a repeated note) are easy to overuse — never put
           // one right after this voice's previous figure (that produces a voice
           // just oscillating between two notes in eighths), and thin them out
           if (cands.every((c) => /neighbor/.test(c.type))) {
             if (off[v].has(i - 1) || on[v].has(i - 1)) continue;
             if (rng() < 0.35) continue;
+          }
+          // step motions: usually leave plain (anticipations are idiomatically
+          // sparse, mostly cadential); when embellished, strongly prefer an
+          // anticipation over the (leapy) échappée
+          if (cands.every((c) => c.type === 'anticipation' || c.type === 'escape')) {
+            if (rng() < 0.5) continue;
+            const ant = cands.filter((c) => c.type === 'anticipation');
+            const esc = cands.filter((c) => c.type === 'escape');
+            cands = ant.length && rng() < 0.85 ? ant : esc.length ? esc : cands;
           }
           chosen = DS.rng.pick(rng, cands);
           kind = 'off';

@@ -5,6 +5,7 @@
 (function () {
   'use strict';
   const DS = (window.DS = window.DS || {});
+  const T = DS.theory;
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -387,6 +388,86 @@
     return all;
   }
 
+  // ---- modulation ----------------------------------------------------------
+
+  // The pitch classes of the diatonic triad on `degree` of `key` (natural
+  // scale; natural minor for minor).
+  function triadPcs(key, degree) {
+    const sc = T.scale(key);
+    const at = (d) => sc[(((degree - 1 + d) % 7) + 7) % 7];
+    return new Set([at(0), at(2), at(4)].map((p) => T.pc({ ...p, oct: 0 })));
+  }
+  function sameSet(a, b) {
+    if (a.size !== b.size) return false;
+    for (const x of a) if (!b.has(x)) return false;
+    return true;
+  }
+
+  // Closely related keys (signature differs by at most one accidental).
+  function closelyRelated(key) {
+    const specs =
+      key.mode === 'major'
+        ? [[5, 'major', 'V'], [4, 'major', 'IV'], [6, 'minor', 'vi'], [2, 'minor', 'ii'], [3, 'minor', 'iii']]
+        : [[3, 'major', 'III'], [5, 'minor', 'v'], [4, 'minor', 'iv'], [6, 'major', 'VI'], [7, 'major', 'VII']];
+    return specs.map(([deg, mode, label]) => {
+      const t = T.degreeNote(key, deg, 0);
+      return { tonic: { step: t.step, alter: t.alter }, mode, label };
+    });
+  }
+
+  // A diatonic-common-chord pivot: a predominant/tonic/submediant in key2 whose
+  // pitches are also diatonic in key1.
+  function findPivot(key1, key2) {
+    for (const dg2 of [2, 4, 6, 1]) {
+      const pcs2 = triadPcs(key2, dg2);
+      for (let dg1 = 1; dg1 <= 7; dg1++) if (sameSet(pcs2, triadPcs(key1, dg1))) return dg2;
+    }
+    return null;
+  }
+  function pivotSym(mode, degree) {
+    return mode === 'major'
+      ? { 1: 'I', 2: 'ii6', 4: 'IV', 6: 'vi' }[degree]
+      : { 1: 'i', 2: 'iio6', 4: 'iv', 6: 'VI' }[degree];
+  }
+
+  // A multi-phrase progression that modulates to a closely related key in its
+  // final phrase via a diatonic common chord, confirmed by a PAC in the new
+  // key. Earlier phrases stay in the home key. Each chord carries its governing
+  // `key`; the pivot carries a `keyChange` label.
+  function generateModulating(rng, { difficulty, mode, phrases, key1 }) {
+    const targets = closelyRelated(key1);
+    const W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
+    const key2 = DS.rng.weighted(rng, targets.map((t) => [t, W[t.label] || 0.5]));
+    const dg2 = findPivot(key1, key2);
+    if (dg2 == null) return null;
+
+    const all = [];
+    const phraseEnds = [];
+    for (let p = 0; p < phrases - 1; p++) {
+      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: 'open' });
+      for (const c of ph) { c.key = key1; all.push(c); }
+      phraseEnds.push(all.length - 1);
+    }
+
+    const tonic1 = mode === 'minor' ? 'i' : 'I';
+    const tonic2 = key2.mode === 'minor' ? 'i' : 'I';
+    const label = T.name(key2.tonic).replace('#', '♯').replace('b', '♭') + ':';
+    const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
+    // I(home) | pivot(new-key predominant) V7(new) | I(new, held)
+    const seq = [
+      mk(tonic1, key1, 96),
+      mk(pivotSym(key2.mode, dg2), key2, 48, { keyChange: label }),
+      mk('V7', key2, 48),
+      mk(tonic2, key2, 192, { sopranoEnd: [1] }),
+    ];
+    for (const c of seq) all.push(c);
+    phraseEnds.push(all.length - 1);
+    all.phraseEnds = phraseEnds;
+    all.cadence = 'PAC';
+    all.modulation = { from: key1, to: key2 };
+    return all;
+  }
+
   // Display label, e.g. viio6 -> vii°6, I64c -> I64
   function display(sym) {
     return sym
@@ -401,5 +482,5 @@
     return { ...clone(spec), sym };
   }
 
-  DS.progression = { generate, generatePhrases, chordSpec, display };
+  DS.progression = { generate, generatePhrases, generateModulating, closelyRelated, chordSpec, display };
 })();

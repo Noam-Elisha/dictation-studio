@@ -361,12 +361,12 @@
 
   function harmonizeOnce(rng, key, chords, opts = {}) {
     const K = opts.beam || 14;
-    const ctxs = chords.map((spec) => context(key, spec));
+    const ctxs = chords.map((spec) => context(spec.key || key, spec));
     const candLists = ctxs.map((ctx, i) => {
       const isLast = i === chords.length - 1;
       const sopranoPcs =
         isLast && chords[i].sopranoEnd
-          ? new Set(chords[i].sopranoEnd.map((deg) => T.pc({ ...T.degreeNote(key, deg, 0), oct: 4 })))
+          ? new Set(chords[i].sopranoEnd.map((deg) => T.pc({ ...T.degreeNote(chords[i].key || key, deg, 0), oct: 4 })))
           : null;
       let cands = candidates(ctx, { sopranoPcs });
       cands = cands.filter((c) => !chordError(ctx, c));
@@ -417,7 +417,7 @@
 
   function validate(key, chords, voices) {
     const errs = [];
-    const ctxs = chords.map((spec) => context(key, spec));
+    const ctxs = chords.map((spec) => context(spec.key || key, spec));
     const midis = voices.map((ch) => ch.map((p) => T.midi(p)));
 
     voices.forEach((ch, i) => {

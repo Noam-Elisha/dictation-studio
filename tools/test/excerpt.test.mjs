@@ -160,6 +160,61 @@ suite('excerpt: generated', () => {
     eq(ex.sig, -3);
   });
 
+  test('difficulty 4 modulates sometimes (more on longer exercises), never below', () => {
+    const rate = (difficulty, phrases) => {
+      let mod = 0, total = 0;
+      for (let seed = 0; seed < 300; seed++) {
+        const ex = DS.excerpt.fromGenerated(DS.rng.create(seed * 13 + phrases), {
+          mode: 'harmonic', difficulty, harmonicPhrases: phrases, keyMode: seed % 2 ? 'major' : 'minor',
+        });
+        ok(ex, `d${difficulty} p${phrases} seed ${seed} produced an excerpt`);
+        total++;
+        if (ex.meta.modulation) mod++;
+      }
+      return mod / total;
+    };
+    // never below difficulty 4, nor for single-phrase exercises
+    eq(rate(3, 3), 0, 'no modulation at D3');
+    eq(rate(4, 1), 0, 'no modulation for a single phrase');
+    // present at D4, and more frequent as the exercise grows
+    const r2 = rate(4, 2), r3 = rate(4, 3), r4 = rate(4, 4);
+    ok(r2 > 0.1, `D4 two-phrase modulates sometimes (${r2.toFixed(2)})`);
+    ok(r2 < r3 && r3 < r4, `longer exercises modulate more often (${r2.toFixed(2)} < ${r3.toFixed(2)} < ${r4.toFixed(2)})`);
+  });
+
+  test('a modulating excerpt carries a labelled pivot and stays voice-aligned', () => {
+    let checked = 0;
+    for (let seed = 0; seed < 2000 && checked < 30; seed++) {
+      const ex = DS.excerpt.fromGenerated(DS.rng.create(seed * 7 + 1), {
+        mode: 'harmonic', difficulty: 4, harmonicPhrases: 3, keyMode: seed % 2 ? 'major' : 'minor',
+      });
+      if (!ex || !ex.meta.modulation) continue;
+      checked++;
+      // exactly one roman is a key-change label ("G:ii6"), as one lyric token
+      // (only pivot labels contain a colon; normal numerals never do)
+      const tagged = ex.romans.filter((r) => r.label.includes(':'));
+      eq(tagged.length, 1, `seed ${seed}: one key-change label`);
+      ok(!/\s/.test(tagged[0].label), `seed ${seed}: label is a single token`);
+      const to = ex.meta.modulation.to;
+      const norm = (s) => s.replace(/♯/g, '#').replace(/♭/g, 'b');
+      ok(norm(tagged[0].label).startsWith(T.name(to.tonic) + ':'), `seed ${seed}: label names the new key`);
+      // four voices, all the same total duration, whole bars
+      const totals = ex.voices.map((v) => v.reduce((s, n) => s + n.dur, 0));
+      ok(totals.every((t) => t === totals[0]), `seed ${seed}: voices aligned`);
+      eq(totals[0] % 192, 0, `seed ${seed}: whole bars`);
+      // the modulation introduces a pitch outside the home key signature
+      const SH = [3, 0, 4, 1, 5, 2, 6], FL = [6, 2, 5, 1, 4, 0, 3], sig = ex.sig, sigMap = {};
+      if (sig > 0) for (let i = 0; i < sig; i++) sigMap[SH[i]] = 1;
+      if (sig < 0) for (let i = 0; i < -sig; i++) sigMap[FL[i]] = -1;
+      let outOfKey = 0;
+      for (const v of ex.voices) for (const n of v) {
+        if (n.step >= 0 && n.alter !== (sigMap[n.step] || 0)) outOfKey++;
+      }
+      ok(outOfKey > 0, `seed ${seed}: modulation shows accidentals`);
+    }
+    ok(checked >= 30, `found modulating excerpts to check (${checked})`);
+  });
+
   test('soak: generated harmonic always valid across seeds', () => {
     for (let seed = 0; seed < 150; seed++) {
       const ex = DS.excerpt.fromGenerated(DS.rng.create(seed), {

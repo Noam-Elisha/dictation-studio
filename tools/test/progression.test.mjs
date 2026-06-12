@@ -2,6 +2,7 @@ import { loadDS, suite, test, eq, ok } from './harness.mjs';
 
 const DS = loadDS(['js/rng.js', 'js/theory.js', 'js/progression.js']);
 const P = DS.progression;
+const T = DS.theory;
 
 const D1_MAJOR = new Set(['I', 'I6', 'IV', 'V', 'V7', 'vi', 'I64c']);
 const D1_MINOR = new Set(['i', 'i6', 'iv', 'V', 'V7', 'VI', 'i64c']);
@@ -137,5 +138,86 @@ suite('progression: grammar', () => {
       if (i === -1) continue;
       ok(i + 1 < syms.length && ['V', 'V7'].includes(syms[i + 1]), `seed ${seed}: I64c -> ${syms[i + 1]}`);
     }
+  });
+});
+
+const C_MAJOR = { tonic: { step: 0, alter: 0 }, mode: 'major' };
+const A_MINOR = { tonic: { step: 5, alter: 0 }, mode: 'minor' };
+
+const keyPc = (n) => T.pc({ step: n.step, alter: n.alter, oct: 0 });
+const scalePcs = (key) => new Set(T.scale(key).map(keyPc));
+const chordPcs = (chord, key) =>
+  new Set(chord.tones.map(([deg, alt]) => keyPc(T.degreeNote(key, deg, alt))));
+const sameKey = (a, b) => a.tonic.step === b.tonic.step && a.tonic.alter === b.tonic.alter && a.mode === b.mode;
+
+suite('progression: modulation', () => {
+  test('closely related keys differ by at most one accidental', () => {
+    for (const home of [C_MAJOR, A_MINOR]) {
+      const rel = P.closelyRelated(home);
+      eq(rel.length, 5, 'five closely related keys');
+      const homeFifths = T.fifths(home);
+      for (const k of rel)
+        ok(Math.abs(T.fifths(k) - homeFifths) <= 1, `${k.label} within one accidental`);
+      // relative major/minor is always in the set
+      const relMode = home.mode === 'major' ? 'minor' : 'major';
+      ok(rel.some((k) => k.mode === relMode && T.fifths(k) === homeFifths), 'relative key present');
+    }
+  });
+
+  test('generateModulating: home-key prefix, single pivot, PAC in a closely related new key', () => {
+    let runs = 0;
+    const targetsSeen = new Set();
+    for (let seed = 0; seed < 400; seed++) {
+      const home = seed % 2 ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 5 + 1);
+      const chords = P.generateModulating(rng, {
+        difficulty: 4, mode: home.mode, phrases: 2 + (seed % 3), key1: home,
+      });
+      if (!chords) continue;
+      runs++;
+      const mod = chords.modulation;
+      ok(mod && sameKey(mod.from, home), `seed ${seed}: modulates from home`);
+      targetsSeen.add(T.name(mod.to.tonic) + ' ' + mod.to.mode);
+
+      // target is one of the closely related keys
+      ok(P.closelyRelated(home).some((k) => sameKey(k, mod.to)), `seed ${seed}: target closely related`);
+
+      // exactly one pivot chord, tagged with the new key's label
+      const pivots = chords.filter((c) => c.keyChange);
+      eq(pivots.length, 1, `seed ${seed}: exactly one pivot`);
+      const pivot = pivots[0];
+      ok(sameKey(pivot.key, mod.to), `seed ${seed}: pivot is in the new key`);
+
+      // the pivot is a true common chord: diatonic in BOTH keys
+      const inNew = chordPcs(pivot, mod.to);
+      const homeScale = scalePcs(home);
+      for (const p of inNew) ok(homeScale.has(p), `seed ${seed}: pivot tone ${p} diatonic at home`);
+
+      // everything up to (and incl.) the chord before the pivot stays home;
+      // pivot and after are in the new key
+      const pi = chords.indexOf(pivot);
+      for (let i = 0; i < pi; i++) ok(sameKey(chords[i].key, home), `seed ${seed}: chord ${i} home`);
+      for (let i = pi; i < chords.length; i++) ok(sameKey(chords[i].key, mod.to), `seed ${seed}: chord ${i} new key`);
+
+      // confirmed by V7 -> tonic in the new key
+      const last = chords[chords.length - 1];
+      const penult = chords[chords.length - 2];
+      ok(/^[Ii]$/.test(last.sym), `seed ${seed}: ends on tonic, saw ${last.sym}`);
+      eq(penult.sym, 'V7', `seed ${seed}: dominant-seventh before the close`);
+      eq(chords.cadence, 'PAC', `seed ${seed}: PAC`);
+
+      // bar-aligned: phrases of two bars each
+      const total = chords.reduce((s, c) => s + c.dur, 0);
+      eq(total % 192, 0, `seed ${seed}: whole bars`);
+    }
+    ok(runs >= 380, `most seeds produced a modulating progression (${runs}/400)`);
+    ok(targetsSeen.size >= 4, `a variety of target keys (${targetsSeen.size})`);
+  });
+
+  test('deterministic from seed', () => {
+    const opts = { difficulty: 4, mode: 'major', phrases: 3, key1: C_MAJOR };
+    const a = P.generateModulating(DS.rng.create(42), { ...opts });
+    const b = P.generateModulating(DS.rng.create(42), { ...opts });
+    eq(a, b);
   });
 });

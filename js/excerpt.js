@@ -201,14 +201,27 @@
 
     if (settings.mode === 'harmonic') {
       const phrases = Math.min(4, Math.max(1, settings.harmonicPhrases || 2));
+      // Difficulty 4 sometimes modulates to a closely related key — more often
+      // on longer (multi-phrase) exercises, per the request.
+      const canModulate = (settings.difficulty || 1) >= 4 && phrases >= 2;
+      const modProb = { 2: 0.3, 3: 0.45, 4: 0.6 }[phrases] || 0;
       let chords = null;
       let voicesByChord = null;
       for (let attempt = 0; attempt < 12 && !voicesByChord; attempt++) {
-        chords = DS.progression.generatePhrases(rng, {
-          difficulty: settings.difficulty || 1,
-          mode: key.mode,
-          phrases,
-        });
+        const tryMod = canModulate && rng() < modProb;
+        chords =
+          (tryMod &&
+            DS.progression.generateModulating(rng, {
+              difficulty: settings.difficulty || 1,
+              mode: key.mode,
+              phrases,
+              key1: key,
+            })) ||
+          DS.progression.generatePhrases(rng, {
+            difficulty: settings.difficulty || 1,
+            mode: key.mode,
+            phrases,
+          });
         voicesByChord = DS.voicing.harmonize(rng, key, chords);
       }
       if (!voicesByChord) return null;
@@ -242,7 +255,12 @@
       const romans = [];
       let tick = 0;
       for (const c of chords) {
-        romans.push({ label: DS.progression.display(c.sym), tick });
+        // a pivot chord carries a "G:" style key-change tag; keep it glued to
+        // the numeral (no space) so abcjs treats it as one lyric syllable
+        const label = c.keyChange
+          ? c.keyChange + DS.progression.display(c.sym)
+          : DS.progression.display(c.sym);
+        romans.push({ label, tick });
         tick += c.dur;
       }
       return {
@@ -262,6 +280,7 @@
           difficulty: settings.difficulty || 1,
           phrases,
           cadence: chords.cadence || null,
+          modulation: chords.modulation || null,
         },
       };
     }
