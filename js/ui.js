@@ -494,6 +494,7 @@
 
     const voiceLevels = () => current.studyVoices.map((on) => (on ? 1 : 0));
     $('#btn-replay').addEventListener('click', () => {
+      if (current.replaying) return session.stopReveal();
       if (!current.studyVoices.some(Boolean)) return banner('Unmute at least one voice.');
       session.playReveal({ voiceLevels: voiceLevels() });
     });
@@ -696,7 +697,8 @@
       const state = session.state;
       if (e.code === 'Space') {
         e.preventDefault();
-        if (state === 'idle' || state === 'revealed' || state === 'finished') startExercise();
+        if (state === 'revealed' && current && current.replaying) session.stopReveal();
+        else if (state === 'idle' || state === 'revealed' || state === 'finished') startExercise();
         else session.stop();
       } else if (e.key === 'p' || e.key === 'P') session.extraPlay();
       else if (e.key === 's' || e.key === 'S') session.skipGap();
@@ -751,10 +753,15 @@
 
       session.on('state', (info) => {
         renderStage(info.state, info);
-        if (info.state === 'revealed' && !current.revealed) {
-          current.revealed = true;
-          renderAnswer();
-          $('#answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (info.state === 'revealed') {
+          if (!current.revealed) {
+            current.revealed = true;
+            renderAnswer();
+            $('#answer-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          current.replaying = !!info.replaying;
+          const rb = $('#btn-replay');
+          if (rb) rb.textContent = info.replaying ? '⏹ Stop' : '▶ Replay';
         }
         if (info.state === 'waiting') onGapTick({ remaining: info.remaining, gapSec: info.gapSec });
       });

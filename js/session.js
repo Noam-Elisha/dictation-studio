@@ -202,6 +202,12 @@
       playSegment(events, totalSec, () => setState('revealed', { replaying: false }));
     };
 
+    // Stop a study replay without leaving the revealed view.
+    session.stopReveal = function () {
+      stopAudio();
+      if (session.state === 'revealed') setState('revealed', { replaying: false });
+    };
+
     session.toIdle = function () {
       session.stop(true);
       session.excerpt = null;

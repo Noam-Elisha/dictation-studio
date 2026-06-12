@@ -252,12 +252,15 @@
         const tk = startTicks[e];
         for (const vc of voices) {
           let t = 0;
-          for (const nt of vc) {
+          for (let j = 0; j < vc.length; j++) {
             if (t === tk) {
-              nt.fermata = true;
+              vc[j].fermata = true;
+              // a fermata begins a fresh held chord — never tie into or out of it
+              if (vc[j].tieEnd) { vc[j].tieEnd = false; if (vc[j - 1]) vc[j - 1].tieStart = false; }
+              if (vc[j].tieStart) { vc[j].tieStart = false; if (vc[j + 1]) vc[j + 1].tieEnd = false; }
               break;
             }
-            t += nt.dur;
+            t += vc[j].dur;
           }
         }
       }

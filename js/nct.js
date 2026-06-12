@@ -306,7 +306,9 @@
           // Difficulty 5 already packs the texture, so thin them harder there.
           if (cands.every((c) => /neighbor/.test(c.type))) {
             if (off[v].has(i - 1) || on[v].has(i - 1)) continue;
-            if (rng() < (difficulty >= 5 ? 0.62 : 0.35)) continue;
+            // difficulty 5 favours passing tones and suspensions; a held note
+            // mostly stays plain (and gets tied) rather than taking a neighbor
+            if (rng() < (difficulty >= 5 ? 0.88 : 0.35)) continue;
           }
           // step motions: usually leave plain (anticipations are idiomatically
           // sparse, mostly cadential); when embellished, strongly prefer an
