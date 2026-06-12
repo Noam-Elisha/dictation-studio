@@ -28,11 +28,13 @@
   const figDur = (chordDur) => (chordDur >= 96 ? Q : E);
 
   // per-voice, per-beat probability of attempting a figure, by difficulty.
-  // Difficulty 5 keeps the difficulty-4 harmony but embellishes maximally.
-  const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46, 5: 0.92 };
+  // Difficulty 5 is richer than 4 but not saturated — a clear step up, not a
+  // wall of motion (it leans on suspensions and passing tones).
+  const P_BASE = { 1: 0.09, 2: 0.24, 3: 0.36, 4: 0.46, 5: 0.52 };
   // chance an attempted figure is an on-beat (suspension / accented passing) vs
-  // off-beat. Difficulty 5 leans hard on suspensions (held-over notes).
-  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36, 5: 0.6 };
+  // off-beat. Difficulty 5 leans toward suspensions but not so hard that the
+  // texture is a thicket of ties.
+  const P_ONBEAT = { 1: 0.16, 2: 0.24, 3: 0.32, 4: 0.36, 5: 0.44 };
 
   function ic(hi, lo) {
     return (((hi - lo) % 12) + 12) % 12;
@@ -260,11 +262,12 @@
     };
     const skip = opts.skipChords || new Set(); // phrase-end chords stay clean (held)
 
-    // difficulty 5 sweeps several times and lets more voices move per chord, so
-    // it packs in as many figures as the validator allows (the held final
-    // chords still stay clean); everything else makes a single, sparser pass
-    const passes = difficulty >= 5 ? 4 : 1;
-    const decayBase = difficulty >= 5 ? 0.9 : 0.62;
+    // difficulty 5 sweeps twice and lets a couple of voices move per chord;
+    // everything else makes a single, sparser pass. Neighbour figures are also
+    // kept off adjacent beats so they don't cluster.
+    const passes = difficulty >= 5 ? 2 : 1;
+    const decayBase = difficulty >= 5 ? 0.7 : 0.62;
+    const neighborChords = new Set();
 
     for (let pass = 0; pass < passes; pass++)
     for (let i = 0; i < n - 1; i++) {
@@ -279,10 +282,12 @@
 
         // choose off-beat vs on-beat; on-beat needs chord i+1 to have room and
         // to not already carry a figure (an off-beat there would collide on a
-        // later pass, leaving a zero-length head)
+        // later pass, leaving a zero-length head). A suspension also holds
+        // chord i's tail as its preparation, so chord i must not already carry
+        // an off-beat figure of its own (that would orphan the tie).
         const wantOn =
           rng() < pOn && chords[i + 1].dur >= 2 * E &&
-          !on[v].has(i + 1) && !off[v].has(i + 1) && !skip.has(i + 1);
+          !on[v].has(i + 1) && !off[v].has(i + 1) && !off[v].has(i) && !skip.has(i + 1);
         let chosen = null;
         let kind = 'off';
         if (wantOn) {
@@ -299,8 +304,11 @@
         }
         if (!chosen) {
           // one figure per voice per chord — skip if this voice already carries
-          // an on- or off-beat figure here (the latter matters across passes)
+          // an on- or off-beat figure here (the latter matters across passes).
+          // Also leave chord i's tail alone if chord i+1 holds a tied suspension
+          // that uses it as preparation (an off-beat here would orphan the tie).
           if (on[v].has(i) || off[v].has(i)) continue;
+          if (on[v].has(i + 1) && on[v].get(i + 1).tie) continue;
           // an off-beat figure sounds within chord i's span, so spell it in
           // that chord's key (matters once a phrase has modulated)
           let cands = offbeatCandidates(chords[i].key || key, p1, p2, candDiff).filter((c) =>
@@ -313,9 +321,11 @@
           // Difficulty 5 already packs the texture, so thin them harder there.
           if (cands.every((c) => /neighbor/.test(c.type))) {
             if (off[v].has(i - 1) || on[v].has(i - 1)) continue;
-            // difficulty 5 favours passing tones and suspensions; a held note
-            // mostly stays plain (and gets tied) rather than taking a neighbor
-            if (rng() < (difficulty >= 5 ? 0.88 : 0.35)) continue;
+            // no two neighbours on adjacent beats (in any voice) — they cluster
+            if (neighborChords.has(i - 1) || neighborChords.has(i + 1)) continue;
+            // difficulty 5 is about suspensions and passing tones — neighbours
+            // (which make a voice bounce between two notes) stay very rare
+            if (rng() < (difficulty >= 5 ? 0.95 : 0.35)) continue;
           }
           // step motions: usually leave plain (anticipations are idiomatically
           // sparse, mostly cadential); when embellished, strongly prefer an
@@ -347,16 +357,15 @@
           off[v].set(i, chosen.pitch);
           const lo = full ? 0 : starts[i];
           const hi = full ? total : Math.min(total, starts[i] + chords[i].dur + chords[i + 1].dur + 1);
-          if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) placed++;
-          else off[v].delete(i);
+          if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) {
+            placed++;
+            if (/neighbor/.test(chosen.type)) neighborChords.add(i);
+          } else off[v].delete(i);
         }
       }
     }
 
     const voices = deAlternate(buildAll(block, chords, off, on), diss, total);
-    // difficulty 5's dense texture leaves many re-struck common tones; tie a
-    // run of repeated same-pitch notes into one held note so it reads less busy
-    if (difficulty >= 5) tieRepeats(voices);
     ensureBeatOnsets(voices, total);
     return voices;
   }
@@ -393,47 +402,37 @@
     return voices;
   }
 
-  // Join adjacent notes of the same pitch with a tie (a held common tone reads
-  // and sounds cleaner than the same note struck twice). Pitch-class-preserving,
-  // so it can never add a parallel or a clash. Fermatas and rests break a run.
-  function tieRepeats(voices) {
-    for (const notes of voices) {
-      for (let i = 0; i + 1 < notes.length; i++) {
-        const a = notes[i], b = notes[i + 1];
-        if (a.step < 0 || b.step < 0 || a.fermata || b.fermata) continue;
-        if (b.tieEnd || T.midi(a) !== T.midi(b)) continue;
-        a.tieStart = true;
-        b.tieEnd = true;
-      }
-    }
-    return voices;
-  }
-
   // Safety net: collapse any voice that ends up oscillating between two notes
-  // in straight eighths (X Y X Y) by holding the second pair as a plain note.
-  // Each collapse is checked against the whole texture and reverted if it would
-  // introduce a parallel or a clash (in a dense difficulty-5 texture, holding a
-  // note over its neighbor's slot can line up against another moving voice).
+  // (X Y X Y, in eighths or quarters) by holding the second X and dropping its
+  // neighbour Y — but only when that Y is a non-chord tone (never throw away a
+  // real harmony note). Each collapse is checked against the whole texture and
+  // reverted if it would introduce a parallel or a clash.
   function deAlternate(voices, ctx, total) {
     for (const notes of voices) {
-      const isE = (n) => n.dur === E && n.step >= 0 && !n.tieStart && !n.tieEnd;
+      const short = (n) => n.dur <= Q && n.step >= 0 && !n.tieStart && !n.tieEnd;
       let i = 0;
+      let tick = 0;
       while (i + 3 < notes.length) {
-        if (
-          isE(notes[i]) && isE(notes[i + 1]) && isE(notes[i + 2]) && isE(notes[i + 3]) &&
+        const osc =
+          short(notes[i]) && short(notes[i + 1]) && short(notes[i + 2]) && short(notes[i + 3]) &&
           T.midi(notes[i]) === T.midi(notes[i + 2]) &&
           T.midi(notes[i + 1]) === T.midi(notes[i + 3]) &&
-          T.midi(notes[i]) !== T.midi(notes[i + 1])
-        ) {
+          T.midi(notes[i]) !== T.midi(notes[i + 1]);
+        const t3 = tick + notes[i].dur + notes[i + 1].dur + notes[i + 2].dur;
+        const dropOk =
+          osc && (!ctx || !ctx.chordPcs[activeChordIndex(t3, ctx)].has(pc(T.midi(notes[i + 3]))));
+        if (dropOk) {
           const removed = notes[i + 3];
           notes[i + 2].dur += removed.dur; // hold the second X, drop its neighbor
           notes.splice(i + 3, 1);
           if (ctx && !windowValid(voices, 0, total, ctx)) {
             notes.splice(i + 3, 0, removed); // revert: keep the oscillation
             notes[i + 2].dur -= removed.dur;
+            tick += notes[i].dur;
             i++;
           }
         } else {
+          tick += notes[i].dur;
           i++;
         }
       }
