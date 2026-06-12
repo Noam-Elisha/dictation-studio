@@ -302,10 +302,11 @@
           if (!cands.length) continue;
           // neighbor tones (on a repeated note) are easy to overuse — never put
           // one right after this voice's previous figure (that produces a voice
-          // just oscillating between two notes in eighths), and thin them out
+          // just oscillating between two notes in eighths), and thin them out.
+          // Difficulty 5 already packs the texture, so thin them harder there.
           if (cands.every((c) => /neighbor/.test(c.type))) {
             if (off[v].has(i - 1) || on[v].has(i - 1)) continue;
-            if (rng() < 0.35) continue;
+            if (rng() < (difficulty >= 5 ? 0.62 : 0.35)) continue;
           }
           // step motions: usually leave plain (anticipations are idiomatically
           // sparse, mostly cadential); when embellished, strongly prefer an
@@ -342,7 +343,27 @@
       }
     }
 
-    return deAlternate(buildAll(block, chords, off, on), diss, total);
+    const voices = deAlternate(buildAll(block, chords, off, on), diss, total);
+    // difficulty 5's dense texture leaves many re-struck common tones; tie a
+    // run of repeated same-pitch notes into one held note so it reads less busy
+    if (difficulty >= 5) tieRepeats(voices);
+    return voices;
+  }
+
+  // Join adjacent notes of the same pitch with a tie (a held common tone reads
+  // and sounds cleaner than the same note struck twice). Pitch-class-preserving,
+  // so it can never add a parallel or a clash. Fermatas and rests break a run.
+  function tieRepeats(voices) {
+    for (const notes of voices) {
+      for (let i = 0; i + 1 < notes.length; i++) {
+        const a = notes[i], b = notes[i + 1];
+        if (a.step < 0 || b.step < 0 || a.fermata || b.fermata) continue;
+        if (b.tieEnd || T.midi(a) !== T.midi(b)) continue;
+        a.tieStart = true;
+        b.tieEnd = true;
+      }
+    }
+    return voices;
   }
 
   // Safety net: collapse any voice that ends up oscillating between two notes

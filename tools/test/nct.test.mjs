@@ -232,4 +232,26 @@ suite('nct: embellishment', () => {
     }
     ok(suspensions > 10, `expected some tied suspensions, saw ${suspensions}`);
   });
+
+  test('difficulty 5 ties repeated common tones instead of re-striking them', () => {
+    let tied = 0, struck = 0;
+    for (let seed = 0; seed < 250; seed++) {
+      const key = seed % 2 ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 7 + 5);
+      const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+      const block = DS.voicing.harmonize(rng, key, chords);
+      if (!block) continue;
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 5 });
+      for (const v of voices) {
+        for (let i = 0; i + 1 < v.length; i++) {
+          if (v[i].step < 0 || v[i].fermata || v[i + 1].fermata) continue;
+          if (T.midi(v[i]) !== T.midi(v[i + 1])) continue;
+          if (v[i].tieStart && v[i + 1].tieEnd) tied++;
+          else struck++;
+        }
+      }
+    }
+    ok(tied > 200, `common tones are tied (${tied})`);
+    ok(struck < tied * 0.12, `few re-struck repeats remain (${struck} struck vs ${tied} tied)`);
+  });
 });

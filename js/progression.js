@@ -227,7 +227,7 @@
 
   // cadenceClass: 'authentic' (PAC/IAC only, for a final phrase) | 'open'
   // (favor half/Phrygian cadences, for an internal phrase) | undefined (any).
-  function pickCadence(rng, difficulty, mode, maxLen, cadenceClass) {
+  function pickCadence(rng, difficulty, mode, maxLen, cadenceClass, chromatic) {
     let pool = CADENCES.filter((c) => c.minD <= difficulty && c.syms.length <= maxLen);
     if (mode === 'minor' && difficulty >= 3)
       pool = pool.concat([{ syms: ['iv6', 'V'], type: 'PHC', minD: 3 }]);
@@ -238,8 +238,9 @@
     const weighted = pool.map((c) => {
       let w = (CADENCE_WEIGHT[c.type] / Math.sqrt(c.syms.length)) * (1 + 0.7 * c.minD);
       if (cadenceClass === 'open') w *= c.type === 'HC' || c.type === 'PHC' ? 3 : c.type === 'DC' ? 1.3 : 0.6;
-      // augmented sixths and the Neapolitan are striking — keep them a bit rarer
-      if (c.syms.some((s) => s === 'N6' || s === 'It6' || s === 'Fr43' || s === 'Ger65')) w *= 0.6;
+      // augmented sixths and the Neapolitan are striking — keep them a bit
+      // rarer, except at difficulty 5 which leans into the chromaticism
+      if (!chromatic && c.syms.some((s) => s === 'N6' || s === 'It6' || s === 'Fr43' || s === 'Ger65')) w *= 0.6;
       return [c, w];
     });
     const chosen = DS.rng.weighted(rng, weighted);
@@ -279,7 +280,10 @@
     return from.fn !== 'D';
   }
 
-  function walkBody(rng, t, start, len, cadenceHead, mode) {
+  // a chord that colours the harmony (secondary dominant or a borrowed chord)
+  const isColour = (s) => /\//.test(s) || /^(bVI|bVII|iv|iio6|iiø65|viio7)$/.test(s);
+
+  function walkBody(rng, t, start, len, cadenceHead, mode, chromatic) {
     for (let attempt = 0; attempt < 80; attempt++) {
       const out = [start];
       let ok = true;
@@ -298,6 +302,8 @@
           ok = false;
           break;
         }
+        // difficulty 5 leans chromatic — favour secondaries and borrowed chords
+        if (chromatic) options = options.map(([s, w]) => [s, isColour(s) ? w * 2.4 : w]);
         out.push(DS.rng.weighted(rng, options));
       }
       if (!ok) continue;
@@ -339,17 +345,17 @@
     return durs;
   }
 
-  function generate(rng, { difficulty, mode, bars, length, cadenceClass }) {
+  function generate(rng, { difficulty, mode, bars, length, cadenceClass, chromatic }) {
     difficulty = Math.min(4, Math.max(1, difficulty || 1)); // no harmony beyond D4
     const t = table(difficulty, mode);
     const tonic = mode === 'minor' ? 'i' : 'I';
     const durations = length ? legacyDurations(length) : buildRhythm(rng, bars || 3);
     const M = durations.length;
     for (let attempt = 0; attempt < 40; attempt++) {
-      const cadence = pickCadence(rng, difficulty, mode, M - 1, cadenceClass);
+      const cadence = pickCadence(rng, difficulty, mode, M - 1, cadenceClass, chromatic);
       const bodyLen = M - cadence.syms.length;
       if (bodyLen < 1) continue;
-      const body = walkBody(rng, t, tonic, bodyLen, cadence.syms[0], mode);
+      const body = walkBody(rng, t, tonic, bodyLen, cadence.syms[0], mode, chromatic);
       if (!body) continue;
       const syms = body.concat(cadence.syms);
       const chords = syms.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durations[i] }));
@@ -375,13 +381,13 @@
   // ending in a cadence (internal phrases favor half cadences, the last is
   // authentic). Returns one flat chord array with `.phraseEnds` = the chord
   // index ending each phrase (for fermatas).
-  function generatePhrases(rng, { difficulty, mode, phrases }) {
+  function generatePhrases(rng, { difficulty, mode, phrases, chromatic }) {
     const all = [];
     const phraseEnds = [];
     let lastType = 'PAC';
     for (let p = 0; p < phrases; p++) {
       const isLast = p === phrases - 1;
-      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open' });
+      const ph = generate(rng, { difficulty, mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open', chromatic });
       for (const c of ph) all.push(c);
       phraseEnds.push(all.length - 1);
       lastType = ph.cadence;
@@ -442,10 +448,15 @@
   }
   const MOD_W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
 
-  // `count` non-adjacent phrase indices in [0, phrases) (so a freshly reached
-  // key always gets at least one phrase to settle before the next pivot). Any
-  // phrase, including the first, is an equally good place to modulate.
-  function pickModIndices(rng, phrases, count) {
+  // `count` phrase indices in [0, phrases) to modulate at. Any phrase, including
+  // the first, is fair game. By default pivots are non-adjacent so a freshly
+  // reached key gets a phrase to settle; allowAdjacent (difficulty 5) lets the
+  // music modulate phrase after phrase.
+  function pickModIndices(rng, phrases, count, allowAdjacent) {
+    if (allowAdjacent) {
+      const all = Array.from({ length: phrases }, (_, i) => i);
+      return DS.rng.shuffle(rng, all).slice(0, count).sort((a, b) => a - b);
+    }
     const sets = [];
     const rec = (start, chosen) => {
       if (chosen.length === count) { sets.push(chosen.slice()); return; }
@@ -480,10 +491,19 @@
   // ends with a PAC in its final key. Stay-phrases use ordinary open cadences
   // (authentic on the last). Each chord carries its governing `key`; every pivot
   // carries a `keyChange` label.
-  function generateModulating(rng, { difficulty, mode, phrases, key1 }) {
-    const maxMods = Math.min(2, Math.ceil(phrases / 2));
-    const nMods = maxMods <= 1 ? 1 : DS.rng.weighted(rng, [[1, 0.75], [2, 0.25]]);
-    const modAt = new Set(pickModIndices(rng, phrases, nMods));
+  function generateModulating(rng, { difficulty, mode, phrases, key1, chromatic }) {
+    // difficulty 5 modulates harder: up to one pivot per phrase (adjacent
+    // allowed), weighted toward more of them
+    const maxMods = chromatic
+      ? Math.min(3, phrases - 1) || 1
+      : Math.min(2, Math.ceil(phrases / 2));
+    let nMods = 1;
+    if (maxMods > 1) {
+      const opts = [];
+      for (let k = 1; k <= maxMods; k++) opts.push([k, chromatic ? k : k === 1 ? 0.75 : 0.25]);
+      nMods = DS.rng.weighted(rng, opts);
+    }
+    const modAt = new Set(pickModIndices(rng, phrases, nMods, chromatic));
 
     let curKey = key1;
     const all = [];
@@ -513,7 +533,7 @@
 
       if (!phraseChords) {
         phraseChords = generate(rng, {
-          difficulty, mode: curKey.mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open',
+          difficulty, mode: curKey.mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open', chromatic,
         });
         for (const c of phraseChords) c.key = curKey;
         if (isLast) lastCadence = phraseChords.cadence;

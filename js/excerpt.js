@@ -202,13 +202,16 @@
     if (settings.mode === 'harmonic') {
       const phrases = Math.min(4, Math.max(1, settings.harmonicPhrases || 2));
       const difficulty = settings.difficulty || 1;
-      // difficulty 5 keeps the difficulty-4 harmonic vocabulary (it just packs
-      // in far more non-chord tones), so cap the grammar at 4
+      // difficulty 5 keeps the difficulty-4 chord vocabulary but leans into it:
+      // a chromatic bias (more secondaries/borrowed chords + bolder cadences),
+      // far more modulation, and a maximal non-chord-tone pass. Cap the grammar
+      // tables at 4.
       const harmDiff = Math.min(4, difficulty);
+      const chromatic = difficulty >= 5;
       // difficulty 4+ sometimes modulates to a closely related key — more often
-      // on longer (multi-phrase) exercises, per the request.
+      // on longer exercises, and much more often at difficulty 5.
       const canModulate = difficulty >= 4 && phrases >= 2;
-      const modProb = { 2: 0.4, 3: 0.55, 4: 0.7 }[phrases] || 0;
+      const modProb = (chromatic ? { 2: 0.7, 3: 0.85, 4: 0.95 } : { 2: 0.4, 3: 0.55, 4: 0.7 })[phrases] || 0;
       let chords = null;
       let voicesByChord = null;
       for (let attempt = 0; attempt < 12 && !voicesByChord; attempt++) {
@@ -220,11 +223,13 @@
               mode: key.mode,
               phrases,
               key1: key,
+              chromatic,
             })) ||
           DS.progression.generatePhrases(rng, {
             difficulty: harmDiff,
             mode: key.mode,
             phrases,
+            chromatic,
           });
         voicesByChord = DS.voicing.harmonize(rng, key, chords);
       }

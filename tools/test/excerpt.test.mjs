@@ -182,6 +182,24 @@ suite('excerpt: generated', () => {
     ok(r2 < r3 && r3 < r4, `longer exercises modulate more often (${r2.toFixed(2)} < ${r3.toFixed(2)} < ${r4.toFixed(2)})`);
   });
 
+  test('difficulty 5 modulates more, and with more pivots, than difficulty 4', () => {
+    const stats = (difficulty) => {
+      let mod = 0, pivots = 0, total = 0;
+      for (let seed = 0; seed < 250; seed++) {
+        const ex = DS.excerpt.fromGenerated(DS.rng.create(seed * 11 + difficulty), {
+          mode: 'harmonic', difficulty, harmonicPhrases: 4, keyMode: seed % 2 ? 'major' : 'minor',
+        });
+        if (!ex) continue;
+        total++;
+        if (ex.meta.modulation) { mod++; pivots += ex.romans.filter((r) => r.label.includes(':')).length; }
+      }
+      return { rate: mod / total, pivotsPer: pivots / Math.max(1, mod) };
+    };
+    const d4 = stats(4), d5 = stats(5);
+    ok(d5.rate > d4.rate && d5.rate > 0.85, `D5 modulates almost always (${d5.rate.toFixed(2)} vs ${d4.rate.toFixed(2)})`);
+    ok(d5.pivotsPer > d4.pivotsPer + 0.4, `D5 has more pivots per piece (${d5.pivotsPer.toFixed(2)} vs ${d4.pivotsPer.toFixed(2)})`);
+  });
+
   test('a modulating excerpt carries a labelled pivot and stays voice-aligned', () => {
     let checked = 0;
     for (let seed = 0; seed < 2000 && checked < 30; seed++) {
