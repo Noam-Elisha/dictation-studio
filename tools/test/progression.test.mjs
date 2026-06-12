@@ -390,3 +390,24 @@ suite('progression: rhythm invariants', () => {
     ok(made >= 150, `exercised modulating pieces (${made})`);
   });
 });
+
+suite('progression: sequences', () => {
+  test('sequenceBody produces valid descending-fifths fragments that voice', () => {
+    let made = 0, byMode = { major: 0, minor: 0 };
+    for (let s = 0; s < 600 && made < 120; s++) {
+      const mode = s % 2 ? 'major' : 'minor';
+      const key = mode === 'major' ? C_MAJOR : A_MINOR;
+      const d = 3 + (s % 2); // 3 and 4
+      const seq = P._sequenceBody(DS.rng.create(s), mode, 4 + (s % 3), d, d >= 4 && s % 3 === 0, mode === 'major' ? 'V7' : 'V');
+      if (!seq) continue;
+      made++; byMode[mode]++;
+      const cad = mode === 'major' ? ['V7', 'I'] : ['V7', 'i'];
+      const chords = seq.concat(cad).map((x) => P.chordSpec(x, mode));
+      chords[chords.length - 1].sopranoEnd = [1];
+      const v = V.harmonize(DS.rng.create(s), key, chords);
+      ok(v && V.validate(key, chords, v).length === 0, `${mode} seq [${seq.join(' ')}] voices clean`);
+    }
+    ok(made >= 80, `exercised sequenceBody (${made})`);
+    ok(byMode.major > 0 && byMode.minor > 0, 'both modes produce sequences');
+  });
+});

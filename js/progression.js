@@ -472,6 +472,143 @@
     return walkBody(rng, t, tonic, len, cadenceHead, mode, chromatic);
   }
 
+  // ---- descending-fifths sequences ----------------------------------------
+  // A sequence body is a fragment of the diatonic circle-of-fifths chain
+  // descending from the tonic (each root a fifth below the previous). The
+  // diminished step (vii° / II°) is rendered first-inversion (viio6 / iio6) for
+  // voiceability; ii6 / iio6 likewise sit in first inversion, the idiomatic
+  // pre-dominant shape. Three rendering modes colour the same skeleton.
+  const SEQ_ORDER = {
+    major: ['I', 'IV', 'viio6', 'iii', 'vi', 'ii6', 'V'],
+    minor: ['i', 'iv', 'VII', 'III', 'VI', 'iio6', 'V'],
+  };
+  // First-inversion substitutions that exist in the catalogue (smooth-bass
+  // rendering). Chords absent here (vi, VII, VI, iv, III) have no `6` entry and
+  // stay root; viio6/ii6/iio6 are already inverted in SEQ_ORDER.
+  const SEQ_INV = {
+    major: { I: 'I6', IV: 'IV6', iii: 'iii6', V: 'V6' },
+    minor: { i: 'i6', iv: 'iv6', V: 'V6' },
+  };
+  // Applied-dominant insertions: each diatonic target in the chain may be
+  // preceded by its secondary dominant (D4+/chromatic only). The secondary
+  // resolves immediately into the target it precedes, which RESOLUTION confirms.
+  // Keyed by the chain target sym -> the applied-dominant sym to insert.
+  const SEQ_APPLIED = {
+    major: { IV: 'V7/IV', vi: 'V7/vi', ii6: 'V/ii', V: 'V/V' },
+    minor: { iv: 'V7/iv', V: 'V/V' },
+  };
+  // Canonical keys used to voice-check sequence fragments. The voicing engine is
+  // transposition-equivariant over these diatonic shapes, so a fragment that
+  // voices cleanly here voices in any key of that mode.
+  const SEQ_KEY = {
+    major: { tonic: { step: 0, alter: 0 }, mode: 'major' }, // C major
+    minor: { tonic: { step: 5, alter: 0 }, mode: 'minor' }, // A minor
+  };
+
+  // Voiceability is the bar: a candidate fragment must voice cleanly into a
+  // minimal authentic cadence. Grammar (tendencyCompatible/canPrecede) accepts a
+  // few tails that the voicer can't realise reliably — most notably the minor
+  // submediant (VI) terminating the chain before V7 (...III VI V7): it voices at
+  // best ~half the time and never in root position. We require ROBUST
+  // voiceability — every probe seed must come out clean — so a coin-flip tail is
+  // rejected, not admitted on a lucky seed (the integrating caller and the tests
+  // each get a single voicing attempt, so "voices sometimes" isn't enough). If
+  // the voicing engine isn't loaded (progression.js used standalone), fall back
+  // to a grammar-only pass.
+  function seqVoices(mode, frag) {
+    const voicing = DS.voicing;
+    if (!voicing) return true; // standalone: no engine to check against
+    const key = SEQ_KEY[mode];
+    const cadTonic = mode === 'minor' ? 'i' : 'I';
+    const syms = frag.concat(['V7', cadTonic]);
+    const chords = syms.map((s) => chordSpec(s, mode));
+    chords[chords.length - 1].sopranoEnd = [1];
+    for (let seed = 0; seed < 8; seed++) {
+      const v = voicing.harmonize(DS.rng.create(seed * 101 + 7), key, chords);
+      if (!(v && voicing.validate(key, chords, v).length === 0)) return false;
+    }
+    return true;
+  }
+
+  // Build a `len`-long descending-fifths fragment from the tonic, or null if it
+  // can't connect to `cadenceHead`, if len < 3, or if a rendering can't be
+  // built. Not wired into composeBody (Task 12 integrates it); the caller falls
+  // back on null.
+  function sequenceBody(rng, mode, len, difficulty, chromatic, cadenceHead) {
+    if (len < 3) return null;
+    const order = SEQ_ORDER[mode];
+    if (!order || len > order.length) return null;
+    const t = table(difficulty, mode);
+
+    // Mode-selection weights, keyed off difficulty + chromatic (per the spec).
+    // Applied-dominant is D4+ / chromatic only.
+    let weights;
+    if (difficulty >= 4 && chromatic) weights = { root: 0.25, smooth: 0.25, applied: 0.5 };
+    else if (difficulty >= 4) weights = { root: 0.4, smooth: 0.3, applied: 0.3 };
+    else weights = { root: 0.8, smooth: 0.2, applied: 0 };
+
+    // Render the full order (length order.length) under the chosen mode, always
+    // opening on the tonic in root position, then slice to `len`.
+    const renderRoot = () => order.slice();
+    const renderSmooth = () => {
+      const inv = SEQ_INV[mode];
+      // Alternate: invert every other chord where an inversion exists, but keep
+      // position 0 (the tonic) root — composeBody opens the body on I/i root.
+      return order.map((sym, i) => (i > 0 && i % 2 === 1 && inv[sym] ? inv[sym] : sym));
+    };
+    const renderApplied = () => {
+      // Greedily expand the chain up to `len`, inserting a target's applied
+      // dominant before it only when BOTH the secondary and its resolution fit
+      // in the remaining budget — so the slice never ends on a dangling
+      // secondary. Position 0 (tonic) is never preceded.
+      const applied = SEQ_APPLIED[mode];
+      const out = [];
+      for (let i = 0; i < order.length && out.length < len; i++) {
+        const sym = order[i];
+        const sec = i > 0 ? applied[sym] : null;
+        // need room for [sec, sym]; otherwise just the target
+        if (sec && CAT[mode][sec] && out.length + 2 <= len && rng() < 0.6) out.push(sec);
+        out.push(sym);
+      }
+      return out;
+    };
+
+    const builders = [];
+    if (weights.root > 0) builders.push([renderRoot, weights.root]);
+    if (weights.smooth > 0) builders.push([renderSmooth, weights.smooth]);
+    if (weights.applied > 0) builders.push([renderApplied, weights.applied]);
+
+    // Try the weighted choice first, then fall through to the others so a
+    // valid fragment is preferred over null when one exists.
+    const ordered = [];
+    const chosen = DS.rng.weighted(rng, builders);
+    ordered.push(chosen);
+    for (const [b] of builders) if (b !== chosen) ordered.push(b);
+
+    for (const build of ordered) {
+      const full = build();
+      if (full.length < len) continue;
+      const frag = full.slice(0, len);
+      if (frag.length !== len) continue;
+      // never strand an applied dominant at the tail (its resolution got sliced)
+      const last = frag[frag.length - 1];
+      if (RESOLUTION[last]) continue;
+      // every adjacent pair must be voice-leadable, and the tail must be able to
+      // precede the cadence head
+      let okSeq = true;
+      for (let i = 1; i < frag.length && okSeq; i++)
+        if (!tendencyCompatible(CAT[mode][frag[i - 1]], CAT[mode][frag[i]])) okSeq = false;
+      if (!okSeq) continue;
+      if (!canPrecede(t, last, cadenceHead, mode)) continue;
+      if (last === cadenceHead) continue;
+      // final gate: it must actually voice (catches grammar-legal-but-
+      // unvoiceable tails, e.g. minor ...III VI before V7)
+      if (!seqVoices(mode, frag)) continue;
+      return frag;
+    }
+    return null;
+  }
+
   const TPQ = 48, BAR = 192;
   const onStrong = (tick) => tick % BAR === 0 || tick % BAR === 96;
 
@@ -817,5 +954,6 @@
   DS.progression = {
     generate, generatePhrases, generateModulating, closelyRelated, chordSpec, display,
     _composeBody: composeBody, _buildPhrase: buildPhrase, _PROLONG: PROLONG,
+    _sequenceBody: sequenceBody,
   };
 })();
