@@ -313,4 +313,24 @@ suite('progression: rhythm invariants', () => {
     }
     ok(midBar / ends > 0.1, `some phrase-ends fall on beat 3 (pickups): ${midBar}/${ends}`);
   });
+
+  test('generateModulating obeys the rhythm invariants and closes the bar', () => {
+    let made = 0;
+    for (let s = 0; s < 1200 && made < 200; s++) {
+      const d = 4 + (s % 2); // 4 and 5
+      const chromatic = d >= 5;
+      const mode = s % 2 ? 'major' : 'minor';
+      const key1 = { tonic: mode === 'major' ? { step: 0, alter: 0 } : { step: 5, alter: 0 }, mode };
+      const all = P.generateModulating(DS.rng.create(s * 13 + d), { difficulty: Math.min(4, d), mode, phrases: 2 + (s % 3), key1, chromatic });
+      if (!all) continue;
+      made++;
+      ok(!crossesBarline(all), 'no note crosses a barline');
+      ok(all.every((c) => c.dur !== 192), 'no whole notes');
+      ok(all.reduce((a, c) => a + c.dur, 0) % 192 === 0, 'piece closes the final bar');
+      const st = startTicks(all);
+      for (const e of all.phraseEnds) { ok(strongBeat(st[e]), `phrase-end ${e} on a strong beat`); ok(all[e].fermata === true, 'fermata'); }
+      ok(all.modulation && all.phraseEnds && all.cadence, 'contract preserved');
+    }
+    ok(made >= 150, `exercised modulating pieces (${made})`);
+  });
 });

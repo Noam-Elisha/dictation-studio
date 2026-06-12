@@ -609,18 +609,23 @@
     return sets.length ? DS.rng.pick(rng, sets) : [];
   }
 
-  // One two-bar phrase that pivots from curKey into newKey and confirms it:
-  // tonic(cur) | pivot(new) V7(new) | tonic(new, held).
-  function modPhrase(curKey, newKey, dg2) {
+  // One pivoting phrase that confirms newKey: tonic(cur) | pivot(new) | V7(new) |
+  // tonic(new). Harmonic content and the per-chord key/keyChange tags are fixed;
+  // the rhythm is a flexible beat-stream from `startPhase` (quarters, plus one
+  // half if needed to land the cadence on a strong beat — never crosses a
+  // barline). The closing tonic bears the fermata (a half if `isFinal`, else a
+  // quarter so the next phrase picks up on the next beat).
+  function modPhrase(curKey, newKey, dg2, startPhase, isFinal) {
     const tonicC = curKey.mode === 'minor' ? 'i' : 'I';
     const tonicN = newKey.mode === 'minor' ? 'i' : 'I';
     const label = T.name(newKey.tonic).replace('#', '♯').replace('b', '♭') + ':';
+    const durs = assignBeatStream(4, startPhase, isFinal ? 2 * TPQ : TPQ);
     const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
     return [
-      mk(tonicC, curKey, 96),
-      mk(pivotSym(newKey.mode, dg2), newKey, 48, { keyChange: label }),
-      mk('V7', newKey, 48),
-      mk(tonicN, newKey, 192, { sopranoEnd: [1] }),
+      mk(tonicC, curKey, durs[0]),
+      mk(pivotSym(newKey.mode, dg2), newKey, durs[1], { keyChange: label }),
+      mk('V7', newKey, durs[2]),
+      mk(tonicN, newKey, durs[3], { sopranoEnd: [1], fermata: true }),
     ];
   }
 
@@ -633,27 +638,34 @@
   // carries a `keyChange` label.
   function generateModulating(rng, { difficulty, mode, phrases, key1, chromatic }) {
     // difficulty 5 modulates harder: up to one pivot per phrase (adjacent
-    // allowed), weighted toward more of them
+    // allowed), weighted toward more of them. Pivots occupy the non-final
+    // phrases only ([0, phrases-1)), so cap the count to what fits there:
+    // non-adjacent ⇒ at most ceil((phrases-1)/2); adjacent ⇒ phrases-1.
+    const modRange = phrases - 1;
     const maxMods = chromatic
-      ? Math.min(3, phrases - 1) || 1
-      : Math.min(2, Math.ceil(phrases / 2));
+      ? Math.min(3, modRange) || 1
+      : Math.min(2, Math.ceil(modRange / 2));
     let nMods = 1;
     if (maxMods > 1) {
       const opts = [];
       for (let k = 1; k <= maxMods; k++) opts.push([k, chromatic ? k : k === 1 ? 0.75 : 0.25]);
       nMods = DS.rng.weighted(rng, opts);
     }
-    const modAt = new Set(pickModIndices(rng, phrases, nMods, chromatic));
+    // Confine pivots to the non-final phrases [0, phrases-1): the final phrase is
+    // always a flexible stay-phrase that confirms the destination key with an
+    // authentic cadence and flexes its budget to close the bar. A 1-phrase piece
+    // therefore never modulates and returns null (the caller falls back).
+    const modAt = new Set(pickModIndices(rng, phrases - 1, nMods, chromatic));
 
     let curKey = key1;
     const all = [];
     const phraseEnds = [];
     const path = [key1];
     let modulated = false;
-    let lastCadence = 'PAC';
+    let phase = 0; // the piece begins on a downbeat
 
-    for (let p = 0; p < phrases; p++) {
-      const isLast = p === phrases - 1;
+    // ---- internal phrases (modulating or stay) ----------------------------
+    for (let p = 0; p < phrases - 1; p++) {
       let phraseChords = null;
 
       if (modAt.has(p)) {
@@ -662,31 +674,57 @@
           const newKey = DS.rng.weighted(rng, targets.map((t) => [t, MOD_W[t.label] || 0.5]));
           const dg2 = findPivot(curKey, newKey);
           if (dg2 != null) {
-            phraseChords = modPhrase(curKey, newKey, dg2);
+            phraseChords = modPhrase(curKey, newKey, dg2, phase, false);
             curKey = newKey;
             path.push({ tonic: newKey.tonic, mode: newKey.mode });
             modulated = true;
-            if (isLast) lastCadence = 'PAC';
           }
         }
       }
 
       if (!phraseChords) {
-        phraseChords = generate(rng, {
-          difficulty, mode: curKey.mode, bars: 2, cadenceClass: isLast ? 'authentic' : 'open', chromatic,
+        phraseChords = buildPhrase(rng, {
+          mode: curKey.mode, difficulty, startPhase: phase,
+          beatBudget: 5 + Math.floor(rng() * 5), cadenceClass: 'open', chromatic, isFinal: false,
         });
         for (const c of phraseChords) c.key = curKey;
-        if (isLast) lastCadence = phraseChords.cadence;
       }
 
       for (const c of phraseChords) all.push(c);
+      phase = (phase + phraseChords.reduce((a, c) => a + c.dur, 0)) % BAR;
       phraseEnds.push(all.length - 1);
     }
 
     if (!modulated) return null; // caller falls back to a non-modulating plan
 
+    // ---- final phrase: a stay-phrase that closes the bar ------------------
+    // Same bar-close retry as generatePhrases: build an authentic, isFinal
+    // phrase, and if the total isn't a whole bar, rebuild over nearby budgets
+    // (re-deriving phase from the pre-final total each attempt) until it closes.
+    const baseLen = all.length;
+    const baseTotal = all.reduce((a, c) => a + c.dur, 0);
+    const basePhase = baseTotal % BAR;
+    const baseBudget = 5 + Math.floor(rng() * 5);
+    const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
+    let chosen = null;
+    for (const off of offsets) {
+      const beatBudget = baseBudget + off;
+      if (beatBudget < 3) continue; // buildPhrase floors at 3
+      const ph = buildPhrase(rng, {
+        mode: curKey.mode, difficulty, startPhase: basePhase, beatBudget,
+        cadenceClass: 'authentic', chromatic, isFinal: true,
+      });
+      for (const c of ph) c.key = curKey;
+      chosen = ph;
+      if ((baseTotal + ph.reduce((a, c) => a + c.dur, 0)) % BAR === 0) break;
+    }
+
+    all.length = baseLen; // drop any earlier final-phrase attempt
+    for (const c of chosen) all.push(c);
+    phraseEnds.push(all.length - 1);
+
     all.phraseEnds = phraseEnds;
-    all.cadence = lastCadence;
+    all.cadence = chosen.cadence;
     all.modulation = { from: key1, to: { tonic: curKey.tonic, mode: curKey.mode }, path };
     return all;
   }
