@@ -660,26 +660,29 @@
   }
 
   const TPQ = 48, BAR = 192;
-  const onStrong = (tick) => tick % BAR === 0 || tick % BAR === 96;
 
-  // Lay `n` chords as quarter notes from `startPhase`; the last chord is the
-  // cadence (its dur is `finalDur`, with a fermata). If the cadence would land
-  // on a weak beat, lengthen exactly one earlier chord that *starts on a strong
-  // beat* from a quarter to a half — a single +48 shift always moves a weak
-  // landing onto a strong one, and a half that starts on a strong beat stays
-  // within its bar, so no note crosses a barline. Returns the dur array.
-  function assignBeatStream(n, startPhase, finalDur) {
+  // The harmonic rhythm is pure quarter notes: lay `n` chords as quarters, the
+  // last (the cadence) taking `finalDur` (a half or a quarter). A half note is
+  // therefore only ever the cadence — a phrase end — never mid-phrase. The
+  // caller sizes `n` (see countToLand) so the all-quarter run lands the cadence
+  // on a strong beat, so no mid-phrase half is needed to align it.
+  function assignBeatStream(n, finalDur) {
     const durs = new Array(n).fill(TPQ);
     durs[n - 1] = finalDur;
-    const finalStart = startPhase + TPQ * (n - 1);
-    if (!onStrong(finalStart)) {
-      // find the first non-final chord that begins on a strong beat; the chord
-      // just before the cadence always qualifies, so this never fails for n>=2.
-      for (let i = 0; i < n - 1; i++) {
-        if (onStrong(startPhase + TPQ * i)) { durs[i] = 2 * TPQ; break; }
-      }
-    }
     return durs;
+  }
+
+  // The chord count nearest `approx` (and >= `min`) for which a run of quarters
+  // from `startPhase` lands its final chord on `wantPhase` (a strong beat). The
+  // final chord starts at startPhase + TPQ*(n-1); requiring that ≡ wantPhase
+  // (mod BAR) fixes n modulo 4. Search outward from `approx` for the closest fit.
+  function countToLand(startPhase, wantPhase, approx, min) {
+    startPhase = ((startPhase % BAR) + BAR) % BAR;
+    const target = ((((wantPhase - startPhase) / TPQ + 1) % 4) + 4) % 4; // n mod 4
+    for (let d = 0; d < 16; d++)
+      for (const n of [approx + d, approx - d])
+        if (n >= min && ((n % 4) + 4) % 4 === target) return n;
+    return Math.max(min, approx);
   }
 
   // The cadence note value follows the beat it lands on (chorale convention):
@@ -695,33 +698,34 @@
     return isFinal || rng() < 0.25 ? 2 * TPQ : TPQ;
   }
 
-  // Build one self-contained phrase as a beat-stream of quarters (with one
-  // possible half to align the cadence) ending in a fermata-bearing cadence
-  // chord. `beatBudget` is the rough chord count; `cadenceClass` steers the
-  // cadence ('authentic' for a final phrase, 'open' for an internal one).
-  // The closing chord's note value follows its landing beat (see cadenceDur).
-  function buildPhrase(rng, { mode, difficulty, startPhase, beatBudget, cadenceClass, chromatic, isFinal }) {
+  // Build one self-contained phrase as a stream of quarter-note chords ending in
+  // a fermata-bearing cadence (a half, or a quarter with a pickup — see
+  // cadenceDur). `beatBudget` is the rough chord count; the phrase is sized (via
+  // countToLand) so the all-quarter run lands the cadence exactly on `wantPhase`
+  // (a strong beat, default beat 3), so no mid-phrase half is needed.
+  // `cadenceClass` steers the cadence ('authentic' for a final phrase, 'open'
+  // for an internal one).
+  function buildPhrase(rng, { mode, difficulty, startPhase, beatBudget, cadenceClass, chromatic, isFinal, wantPhase }) {
     difficulty = Math.min(4, Math.max(1, difficulty || 1));
     const t = table(difficulty, mode);
     const tonic = mode === 'minor' ? 'i' : 'I';
-    // a phrase needs at least one body chord plus the shortest cadence (2 chords)
     const budget = Math.max(3, beatBudget | 0);
     startPhase = ((startPhase | 0) % BAR + BAR) % BAR;
+    wantPhase = wantPhase == null ? 96 : wantPhase; // cadence lands here
 
     for (let attempt = 0; attempt < 40; attempt++) {
       // cap the cadence so at least one body chord remains, but never below the
       // shortest cadence (2 chords) — pickCadence has no 1-chord cadence
       const maxCad = Math.max(2, budget - 1);
       const cadence = pickCadence(rng, difficulty, mode, maxCad, cadenceClass, chromatic);
-      const bodyLen = budget - cadence.syms.length;
-      if (bodyLen < 1) continue;
-      const body = composeBody(rng, t, bodyLen, cadence.syms[0], mode, difficulty, chromatic);
+      // total chord count so the all-quarter cadence lands on wantPhase, with at
+      // least one body chord before the cadence
+      const n = countToLand(startPhase, wantPhase, budget, cadence.syms.length + 1);
+      const body = composeBody(rng, t, n - cadence.syms.length, cadence.syms[0], mode, difficulty, chromatic);
       if (!body) continue;
       const syms = body.concat(cadence.syms);
-      const durs = assignBeatStream(syms.length, startPhase, TPQ);
-      let cadStart = startPhase;
-      for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
-      durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
+      const durs = assignBeatStream(syms.length, TPQ);
+      durs[durs.length - 1] = cadenceDur(rng, wantPhase, isFinal);
       const chords = syms.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
       const last = chords[chords.length - 1];
       last.fermata = true;
@@ -731,16 +735,15 @@
       return chords;
     }
 
-    // fallback: guaranteed authentic phrase over the same budget
+    // fallback: guaranteed authentic phrase, sized to land on wantPhase
     const base = mode === 'minor' ? ['i', 'iv', 'V7', 'i'] : ['I', 'IV', 'V7', 'I'];
+    const n = countToLand(startPhase, wantPhase, budget, 4);
     const syms = [tonic];
-    while (syms.length < budget - 3) syms.push(syms.length % 2 ? base[1] : tonic);
-    const all = syms.concat(base.slice(1)).slice(0, budget);
-    while (all.length < budget) all.splice(all.length - 1, 0, tonic);
-    const durs = assignBeatStream(all.length, startPhase, TPQ);
-    let cadStart = startPhase;
-    for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
-    durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
+    while (syms.length < n - 3) syms.push(syms.length % 2 ? base[1] : tonic);
+    const all = syms.concat(base.slice(1)).slice(0, n);
+    while (all.length < n) all.splice(all.length - 1, 0, tonic);
+    const durs = assignBeatStream(all.length, TPQ);
+    durs[durs.length - 1] = cadenceDur(rng, wantPhase, isFinal);
     const chords = all.map((sym, i) => ({ ...clone(CAT[mode][sym]), sym, dur: durs[i] }));
     const last = chords[chords.length - 1];
     last.fermata = true;
@@ -749,37 +752,15 @@
     return chords;
   }
 
-  // Build a phrase whose cadence preferentially lands on beat 3 (phase 96) — the
-  // anacrusis landing that keeps the music flowing across the barline (the next
-  // phrase picks up on beat 4). Where the cadence lands is fixed by the phrase's
-  // chord count and starting phase, so we try the base budget, then nearby ones,
-  // and return the first attempt that lands on beat 3; otherwise the last try.
-  // (A final/isFinal phrase that lands on beat 3 also closes the bar, since its
-  // closing half note fills beats 3-4.)
-  function buildPhraseToBeat3(rng, baseBudget, opts) {
-    let chosen = null;
-    for (const off of [0, 1, -1, 2, -2, 3, 4, 5]) {
-      const beatBudget = baseBudget + off;
-      if (beatBudget < 3) continue; // buildPhrase floors at 3
-      const ph = buildPhrase(rng, { ...opts, beatBudget });
-      chosen = ph;
-      let cadStart = opts.startPhase;
-      for (let i = 0; i < ph.length - 1; i++) cadStart += ph[i].dur;
-      if ((((cadStart % BAR) + BAR) % BAR) === 96) break; // landed on beat 3
-    }
-    return chosen;
-  }
-
   // A multi-phrase progression built from `buildPhrase`. The piece starts on a
   // downbeat (phase 0); each phrase is appended to a flat stream and a running
-  // `phase = total % BAR` is threaded into the next, so an internal phrase may
-  // cadence mid-bar (on beat 3) and the next picks up on the following beat (an
-  // implicit anacrusis). Internal phrases are 'open' (half cadences); the last
-  // is 'authentic'. Its closing chord is a half note (`isFinal`), so the piece
-  // only closes the bar when that cadence lands on beat 3 — we rebuild the final
-  // phrase over nearby beat budgets until the running total is a whole number of
-  // bars. Returns one flat chord array with `.phraseEnds` (chord index ending
-  // each phrase, for fermatas) and `.cadence` (the final cadence type).
+  // `phase = total % BAR` is threaded into the next. Every phrase cadences on
+  // beat 3 (wantPhase 96): a half closes to the barline (next phrase on the next
+  // downbeat), a quarter leaves a pickup (next phrase on beat 4). The final
+  // phrase is authentic + isFinal, so its cadence is a half on beat 3 — which
+  // lands the last note on a barline, closing the piece in whole bars. Returns
+  // one flat chord array with `.phraseEnds` (chord index ending each phrase, for
+  // fermatas) and `.cadence` (the final cadence type).
   function generatePhrases(rng, { difficulty, mode, phrases, chromatic }) {
     const all = [];
     const phraseEnds = [];
@@ -787,13 +768,13 @@
     let phase = 0; // the piece begins on a downbeat
 
     for (let p = 0; p < phrases - 1; p++) {
-      // Internal phrases run a ~7–8 chord budget, nudged to land the cadence on
+      // Internal phrases run a ~7–8 chord budget, sized to land the cadence on
       // beat 3 (an anacrusis into the next phrase). The soprano-leap soak
       // (voicing.test.mjs) is normalised per leap rather than per phrase, so
       // longer phrases don't trip it.
-      const baseBudget = 7 + Math.floor(rng() * 2);
-      const ph = buildPhraseToBeat3(rng, baseBudget, {
-        mode, difficulty, startPhase: phase, cadenceClass: 'open', chromatic, isFinal: false,
+      const ph = buildPhrase(rng, {
+        mode, difficulty, startPhase: phase, beatBudget: 7 + Math.floor(rng() * 2),
+        cadenceClass: 'open', chromatic, isFinal: false, wantPhase: 96,
       });
       for (const c of ph) all.push(c);
       phase = (phase + ph.reduce((a, c) => a + c.dur, 0)) % BAR;
@@ -801,14 +782,12 @@
       lastType = ph.cadence;
     }
 
-    // The final phrase must close the bar. A phrase that cadences on beat 3
-    // closes it (the closing half note fills beats 3-4), so reuse the same
-    // beat-3-preferring builder, here authentic and isFinal.
-    const baseTotal = all.reduce((a, c) => a + c.dur, 0);
-    const basePhase = baseTotal % BAR;
-    const baseBudget = 7 + Math.floor(rng() * 2);
-    const chosen = buildPhraseToBeat3(rng, baseBudget, {
-      mode, difficulty, startPhase: basePhase, cadenceClass: 'authentic', chromatic, isFinal: true,
+    // The final phrase is authentic + isFinal: its cadence is a half on beat 3,
+    // which ends on a barline and closes the piece in whole bars.
+    const basePhase = all.reduce((a, c) => a + c.dur, 0) % BAR;
+    const chosen = buildPhrase(rng, {
+      mode, difficulty, startPhase: basePhase, beatBudget: 7 + Math.floor(rng() * 2),
+      cadenceClass: 'authentic', chromatic, isFinal: true, wantPhase: 96,
     });
     for (const c of chosen) all.push(c);
     phraseEnds.push(all.length - 1);
@@ -886,29 +865,33 @@
     return sets.length ? DS.rng.pick(rng, sets) : [];
   }
 
-  // One pivoting phrase that confirms newKey: tonic(cur) | pivot(new) | V7(new) |
-  // tonic(new). Harmonic content and the per-chord key/keyChange tags are fixed;
-  // the rhythm is a flexible beat-stream from `startPhase` (quarters, plus one
-  // half if needed to land the cadence on a strong beat — never crosses a
-  // barline). The closing tonic bears the fermata (a half if `isFinal`, else a
-  // quarter so the next phrase picks up on the next beat).
+  // One pivoting phrase that confirms newKey: it opens with a home-key lead-in
+  // (the tonic with a walking I/I6 bass), pivots into the new key (the common
+  // chord carries the key-change label), then a full new-key cadence —
+  // predominant, cadential 6/4, V7, tonic. The harmonic rhythm is pure quarters;
+  // the lead-in is sized (see countToLand) so the all-quarter run lands the
+  // cadence on beat 3. The closing tonic bears the fermata (a half if `isFinal`,
+  // else a quarter so the next phrase picks up on the next beat).
   function modPhrase(rng, curKey, newKey, dg2, startPhase, isFinal) {
     const tonicC = curKey.mode === 'minor' ? 'i' : 'I';
+    const tonicC6 = curKey.mode === 'minor' ? 'i6' : 'I6';
     const tonicN = newKey.mode === 'minor' ? 'i' : 'I';
     const preN = newKey.mode === 'minor' ? 'iio6' : 'ii6';
     const cad64N = newKey.mode === 'minor' ? 'i64c' : 'I64c';
     const pivot = pivotSym(newKey.mode, dg2);
     const label = T.name(newKey.tonic).replace('#', '♯').replace('b', '♭') + ':';
-    // establish the current key (tonic), pivot into the new key (the common
-    // chord carries the key-change label), then a full new-key cadence so the
-    // phrase reaches ~2 bars: predominant - cadential 6/4 - V7 - tonic.
-    const cells = [[tonicC, curKey, {}], [pivot, newKey, { keyChange: label }]];
-    if (preN !== pivot) cells.push([preN, newKey, {}]);
-    cells.push([cad64N, newKey, {}], ['V7', newKey, {}], [tonicN, newKey, { sopranoEnd: [1] }]);
-    const durs = assignBeatStream(cells.length, startPhase, TPQ);
-    let cadStart = startPhase;
-    for (let i = 0; i < durs.length - 1; i++) cadStart += durs[i];
-    durs[durs.length - 1] = cadenceDur(rng, cadStart, isFinal);
+    startPhase = ((startPhase | 0) % BAR + BAR) % BAR;
+    // new-key tail: pivot (labelled), optional predominant, cadential 6/4, V7, tonic
+    const tail = [[pivot, newKey, { keyChange: label }]];
+    if (preN !== pivot) tail.push([preN, newKey, {}]);
+    tail.push([cad64N, newKey, {}], ['V7', newKey, {}], [tonicN, newKey, { sopranoEnd: [1] }]);
+    // home-key lead-in (walking I/I6 bass), sized so the cadence lands on beat 3
+    const n = countToLand(startPhase, 96, tail.length + 1, tail.length + 1);
+    const lead = [];
+    for (let i = 0; i < n - tail.length; i++) lead.push([i % 2 ? tonicC6 : tonicC, curKey, {}]);
+    const cells = lead.concat(tail);
+    const durs = assignBeatStream(cells.length, TPQ);
+    durs[durs.length - 1] = cadenceDur(rng, 96, isFinal);
     const mk = (sym, key, dur, extra) => ({ ...clone(CAT[key.mode][sym]), sym, dur, key, ...extra });
     const out = cells.map(([sym, key, extra], i) => mk(sym, key, durs[i], extra));
     out[out.length - 1].fermata = true;
@@ -963,9 +946,9 @@
       }
 
       if (!phraseChords) {
-        phraseChords = buildPhraseToBeat3(rng, 7 + Math.floor(rng() * 2), {
-          mode: curKey.mode, difficulty, startPhase: phase,
-          cadenceClass: 'open', chromatic, isFinal: false,
+        phraseChords = buildPhrase(rng, {
+          mode: curKey.mode, difficulty, startPhase: phase, beatBudget: 7 + Math.floor(rng() * 2),
+          cadenceClass: 'open', chromatic, isFinal: false, wantPhase: 96,
         });
         for (const c of phraseChords) c.key = curKey;
       }
@@ -978,13 +961,12 @@
     if (!modulated) return null; // caller falls back to a non-modulating plan
 
     // ---- final phrase: a stay-phrase that closes the bar ------------------
-    // Same as generatePhrases: an authentic, isFinal phrase nudged to cadence on
-    // beat 3, which closes the bar (its closing half note fills beats 3-4).
-    const baseTotal = all.reduce((a, c) => a + c.dur, 0);
-    const basePhase = baseTotal % BAR;
-    const chosen = buildPhraseToBeat3(rng, 7 + Math.floor(rng() * 2), {
-      mode: curKey.mode, difficulty, startPhase: basePhase,
-      cadenceClass: 'authentic', chromatic, isFinal: true,
+    // Same as generatePhrases: an authentic, isFinal phrase whose half cadence on
+    // beat 3 ends on a barline, closing the piece in whole bars.
+    const basePhase = all.reduce((a, c) => a + c.dur, 0) % BAR;
+    const chosen = buildPhrase(rng, {
+      mode: curKey.mode, difficulty, startPhase: basePhase, beatBudget: 7 + Math.floor(rng() * 2),
+      cadenceClass: 'authentic', chromatic, isFinal: true, wantPhase: 96,
     });
     for (const c of chosen) c.key = curKey;
     for (const c of chosen) all.push(c);

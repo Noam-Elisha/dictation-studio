@@ -357,7 +357,7 @@ suite('progression: prolongation', () => {
 });
 
 suite('progression: rhythm invariants', () => {
-  test('buildPhrase emits a fermata beat-stream — no whole notes, no barline crossings, cadence on a strong beat', () => {
+  test('buildPhrase: pure quarter-note harmonic rhythm except the cadence; cadence on a strong beat, no barline crossings', () => {
     for (let s = 0; s < 600; s++) {
       const d = 1 + (s % 4);
       const phase = [0, 48, 96, 144][s % 4];
@@ -365,11 +365,12 @@ suite('progression: rhythm invariants', () => {
         mode: s % 2 ? 'major' : 'minor', difficulty: d, startPhase: phase,
         beatBudget: 6 + (s % 6), cadenceClass: s % 3 ? 'open' : 'authentic', chromatic: false, isFinal: s % 5 === 0,
       });
-      ok(ph.every((c) => c.dur !== 192), 'no whole notes');
-      ok(ph.every((c) => c.dur === 48 || c.dur === 96), 'only quarters and halves');
+      // a half note appears ONLY as the cadence (a phrase end); every chord
+      // before it is a quarter
+      ok(ph.slice(0, -1).every((c) => c.dur === 48), 'every chord before the cadence is a quarter');
+      ok(ph[ph.length - 1].dur === 48 || ph[ph.length - 1].dur === 96, 'cadence is a quarter or a half');
       ok(!crossesBarline(ph, phase), 'no note crosses a barline');
       const st = startTicks(ph, phase);
-      ph.forEach((c, i) => { if (c.dur === 96) ok(strongBeat(st[i]), `half at tick ${st[i]} on a strong beat`); });
       ok(strongBeat(st[st.length - 1]), 'cadence on a strong beat');
       ok(ph[ph.length - 1].fermata === true, 'cadence carries a fermata');
     }
