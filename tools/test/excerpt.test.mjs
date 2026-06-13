@@ -160,7 +160,7 @@ suite('excerpt: generated', () => {
     eq(ex.sig, -3);
   });
 
-  test('difficulty 4 modulates sometimes (more on longer exercises), never below', () => {
+  test('difficulty 4 modulates only with 3+ phrases, more often when longer', () => {
     const rate = (difficulty, phrases) => {
       let mod = 0, total = 0;
       for (let seed = 0; seed < 300; seed++) {
@@ -173,16 +173,18 @@ suite('excerpt: generated', () => {
       }
       return mod / total;
     };
-    // never below difficulty 4, nor for single-phrase exercises
+    // a pivot occupies a MIDDLE phrase (never the first or last, never two in a
+    // row), so modulation needs >= 3 phrases; below that the music stays home.
     eq(rate(3, 3), 0, 'no modulation at D3');
     eq(rate(4, 1), 0, 'no modulation for a single phrase');
-    // present at D4, and more frequent as the exercise grows
-    const r2 = rate(4, 2), r3 = rate(4, 3), r4 = rate(4, 4);
-    ok(r2 > 0.1, `D4 two-phrase modulates sometimes (${r2.toFixed(2)})`);
-    ok(r2 < r3 && r3 < r4, `longer exercises modulate more often (${r2.toFixed(2)} < ${r3.toFixed(2)} < ${r4.toFixed(2)})`);
+    eq(rate(4, 2), 0, 'no modulation for a two-phrase exercise (no middle phrase)');
+    // present from three phrases on, and more frequent as the exercise grows
+    const r3 = rate(4, 3), r4 = rate(4, 4);
+    ok(r3 > 0.1, `three-phrase D4 modulates sometimes (${r3.toFixed(2)})`);
+    ok(r3 < r4, `longer exercises modulate more often (${r3.toFixed(2)} < ${r4.toFixed(2)})`);
   });
 
-  test('difficulty 5 modulates more, and with more pivots, than difficulty 4', () => {
+  test('difficulty 5 modulates more often than 4, still one non-adjacent pivot', () => {
     const stats = (difficulty) => {
       let mod = 0, pivots = 0, total = 0;
       for (let seed = 0; seed < 250; seed++) {
@@ -196,8 +198,11 @@ suite('excerpt: generated', () => {
       return { rate: mod / total, pivotsPer: pivots / Math.max(1, mod) };
     };
     const d4 = stats(4), d5 = stats(5);
+    // D5 carries a higher modulation probability, so it modulates almost always
     ok(d5.rate > d4.rate && d5.rate > 0.85, `D5 modulates almost always (${d5.rate.toFixed(2)} vs ${d4.rate.toFixed(2)})`);
-    ok(d5.pivotsPer > d4.pivotsPer + 0.4, `D5 has more pivots per piece (${d5.pivotsPer.toFixed(2)} vs ${d4.pivotsPer.toFixed(2)})`);
+    // but the no-two-in-a-row rule caps a four-phrase piece at a single pivot,
+    // D5 included — D5's extra difficulty comes from chromaticism, not more keys
+    ok(d5.pivotsPer <= 1.01 && d4.pivotsPer <= 1.01, `one pivot per piece (D4 ${d4.pivotsPer.toFixed(2)}, D5 ${d5.pivotsPer.toFixed(2)})`);
   });
 
   test('a modulating excerpt carries a labelled pivot and stays voice-aligned', () => {

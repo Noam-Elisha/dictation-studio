@@ -674,7 +674,9 @@
   function cadenceDur(rng, cadStart, isFinal) {
     const phase = ((cadStart % BAR) + BAR) % BAR;
     if (phase === 0) return 2 * TPQ; // beat 1 -> half
-    return isFinal || rng() < 0.5 ? 2 * TPQ : TPQ; // beat 3 -> half, or quarter + pickup
+    // beat 3 -> usually a quarter with a pickup into the next phrase; only
+    // occasionally a half. (The piece's final cadence is always a half.)
+    return isFinal || rng() < 0.25 ? 2 * TPQ : TPQ;
   }
 
   // Build one self-contained phrase as a beat-stream of quarters (with one
@@ -731,6 +733,27 @@
     return chords;
   }
 
+  // Build a phrase whose cadence preferentially lands on beat 3 (phase 96) — the
+  // anacrusis landing that keeps the music flowing across the barline (the next
+  // phrase picks up on beat 4). Where the cadence lands is fixed by the phrase's
+  // chord count and starting phase, so we try the base budget, then nearby ones,
+  // and return the first attempt that lands on beat 3; otherwise the last try.
+  // (A final/isFinal phrase that lands on beat 3 also closes the bar, since its
+  // closing half note fills beats 3-4.)
+  function buildPhraseToBeat3(rng, baseBudget, opts) {
+    let chosen = null;
+    for (const off of [0, 1, -1, 2, -2, 3, 4, 5]) {
+      const beatBudget = baseBudget + off;
+      if (beatBudget < 3) continue; // buildPhrase floors at 3
+      const ph = buildPhrase(rng, { ...opts, beatBudget });
+      chosen = ph;
+      let cadStart = opts.startPhase;
+      for (let i = 0; i < ph.length - 1; i++) cadStart += ph[i].dur;
+      if ((((cadStart % BAR) + BAR) % BAR) === 96) break; // landed on beat 3
+    }
+    return chosen;
+  }
+
   // A multi-phrase progression built from `buildPhrase`. The piece starts on a
   // downbeat (phase 0); each phrase is appended to a flat stream and a running
   // `phase = total % BAR` is threaded into the next, so an internal phrase may
@@ -748,13 +771,13 @@
     let phase = 0; // the piece begins on a downbeat
 
     for (let p = 0; p < phrases - 1; p++) {
-      // Internal phrases run a 5–9 beat budget (5 + rngInt(0..4)) for phrase-
-      // length variety. The soprano-leap soak (voicing.test.mjs) is normalised
-      // per leap rather than per phrase, so longer phrases don't trip it.
-      const beatBudget = 7 + Math.floor(rng() * 2);
-      const ph = buildPhrase(rng, {
-        mode, difficulty, startPhase: phase, beatBudget,
-        cadenceClass: 'open', chromatic, isFinal: false,
+      // Internal phrases run a ~7–8 chord budget, nudged to land the cadence on
+      // beat 3 (an anacrusis into the next phrase). The soprano-leap soak
+      // (voicing.test.mjs) is normalised per leap rather than per phrase, so
+      // longer phrases don't trip it.
+      const baseBudget = 7 + Math.floor(rng() * 2);
+      const ph = buildPhraseToBeat3(rng, baseBudget, {
+        mode, difficulty, startPhase: phase, cadenceClass: 'open', chromatic, isFinal: false,
       });
       for (const c of ph) all.push(c);
       phase = (phase + ph.reduce((a, c) => a + c.dur, 0)) % BAR;
@@ -762,29 +785,15 @@
       lastType = ph.cadence;
     }
 
-    // The final phrase must close the bar (total % BAR === 0). Build it, then if
-    // the total isn't a whole bar, rebuild it over budgets beatBudget, +1, -1,
-    // +2, … (re-deriving phase from the pre-final total each attempt) until it
-    // closes. It should close within ~2 tries; bound the retries and fall back
-    // to the last attempt otherwise.
-    const baseLen = all.length;
+    // The final phrase must close the bar. A phrase that cadences on beat 3
+    // closes it (the closing half note fills beats 3-4), so reuse the same
+    // beat-3-preferring builder, here authentic and isFinal.
     const baseTotal = all.reduce((a, c) => a + c.dur, 0);
     const basePhase = baseTotal % BAR;
     const baseBudget = 7 + Math.floor(rng() * 2);
-    const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
-    let chosen = null;
-    for (const off of offsets) {
-      const beatBudget = baseBudget + off;
-      if (beatBudget < 3) continue; // buildPhrase floors at 3
-      const ph = buildPhrase(rng, {
-        mode, difficulty, startPhase: basePhase, beatBudget,
-        cadenceClass: 'authentic', chromatic, isFinal: true,
-      });
-      chosen = ph;
-      if ((baseTotal + ph.reduce((a, c) => a + c.dur, 0)) % BAR === 0) break;
-    }
-
-    all.length = baseLen; // drop any earlier final-phrase attempt
+    const chosen = buildPhraseToBeat3(rng, baseBudget, {
+      mode, difficulty, startPhase: basePhase, cadenceClass: 'authentic', chromatic, isFinal: true,
+    });
     for (const c of chosen) all.push(c);
     phraseEnds.push(all.length - 1);
     lastType = chosen.cadence;
@@ -845,15 +854,10 @@
   }
   const MOD_W = { V: 3, vi: 2.5, III: 2.5, IV: 1.5, iv: 1.2, v: 0.9, ii: 0.6, iii: 0.6, VI: 0.6, VII: 0.5 };
 
-  // `count` phrase indices in [0, phrases) to modulate at. Any phrase, including
-  // the first, is fair game. By default pivots are non-adjacent so a freshly
-  // reached key gets a phrase to settle; allowAdjacent (difficulty 5) lets the
-  // music modulate phrase after phrase.
-  function pickModIndices(rng, phrases, count, allowAdjacent) {
-    if (allowAdjacent) {
-      const all = Array.from({ length: phrases }, (_, i) => i);
-      return DS.rng.shuffle(rng, all).slice(0, count).sort((a, b) => a - b);
-    }
+  // `count` non-adjacent phrase indices in [0, phrases) to modulate at. Pivots
+  // are never adjacent (no two modulations in a row, any difficulty) so a freshly
+  // reached key always gets at least one phrase to settle before the next pivot.
+  function pickModIndices(rng, phrases, count) {
     const sets = [];
     const rec = (start, chosen) => {
       if (chosen.length === count) { sets.push(chosen.slice()); return; }
@@ -895,33 +899,27 @@
     return out;
   }
 
-  // A multi-phrase progression with a progressive tonal plan: it may modulate
-  // as early as the first phrase, then continue in the new key, sometimes
-  // modulating again (never two pivots in adjacent phrases). Each modulation
-  // lands on a closely related key via a diatonic common-chord pivot; the piece
-  // ends with a PAC in its final key. Stay-phrases use ordinary open cadences
-  // (authentic on the last). Each chord carries its governing `key`; every pivot
-  // carries a `keyChange` label.
+  // A multi-phrase progression with a progressive tonal plan: the first phrase
+  // establishes the home key, one or more interior phrases pivot to a closely
+  // related key (never two pivots in a row), and the last phrase confirms the
+  // destination with an authentic cadence. Each modulation lands via a diatonic
+  // common-chord pivot. Stay-phrases use ordinary open cadences (authentic on
+  // the last). Each chord carries its governing `key`; every pivot carries a
+  // `keyChange` label.
   function generateModulating(rng, { difficulty, mode, phrases, key1, chromatic }) {
-    // difficulty 5 modulates harder: up to one pivot per phrase (adjacent
-    // allowed), weighted toward more of them. Pivots occupy the non-final
-    // phrases only ([0, phrases-1)), so cap the count to what fits there:
-    // non-adjacent ⇒ at most ceil((phrases-1)/2); adjacent ⇒ phrases-1.
-    const modRange = phrases - 1;
-    const maxMods = chromatic
-      ? Math.min(3, modRange) || 1
-      : Math.min(2, Math.ceil(modRange / 2));
-    let nMods = 1;
-    if (maxMods > 1) {
-      const opts = [];
-      for (let k = 1; k <= maxMods; k++) opts.push([k, chromatic ? k : k === 1 ? 0.75 : 0.25]);
-      nMods = DS.rng.weighted(rng, opts);
-    }
-    // Confine pivots to the non-final phrases [0, phrases-1): the final phrase is
-    // always a flexible stay-phrase that confirms the destination key with an
-    // authentic cadence and flexes its budget to close the bar. A 1-phrase piece
-    // therefore never modulates and returns null (the caller falls back).
-    const modAt = new Set(pickModIndices(rng, phrases - 1, nMods, chromatic));
+    // Pivots occupy only the MIDDLE phrases (indices 1 .. phrases-2): the first
+    // phrase establishes the home key and the last confirms the destination, and
+    // no two pivots are adjacent. So modulation needs >= 3 phrases; with fewer,
+    // the middle band is empty, nothing modulates, and we return null (the caller
+    // falls back to a single-key plan). Non-adjacency caps the count over a band
+    // of `midCount` phrases at ceil(midCount/2); we allow at most 2.
+    const midCount = Math.max(0, phrases - 2);
+    const maxMods = Math.min(2, Math.ceil(midCount / 2));
+    let nMods = maxMods >= 1 ? 1 : 0;
+    if (maxMods > 1) nMods = DS.rng.weighted(rng, [[1, 0.7], [2, 0.3]]);
+    // pick within the middle band [0, midCount), then shift to real phrase
+    // indices [1, phrases-1).
+    const modAt = new Set(pickModIndices(rng, midCount, nMods).map((i) => i + 1));
 
     let curKey = key1;
     const all = [];
@@ -949,9 +947,9 @@
       }
 
       if (!phraseChords) {
-        phraseChords = buildPhrase(rng, {
+        phraseChords = buildPhraseToBeat3(rng, 7 + Math.floor(rng() * 2), {
           mode: curKey.mode, difficulty, startPhase: phase,
-          beatBudget: 7 + Math.floor(rng() * 2), cadenceClass: 'open', chromatic, isFinal: false,
+          cadenceClass: 'open', chromatic, isFinal: false,
         });
         for (const c of phraseChords) c.key = curKey;
       }
@@ -964,28 +962,15 @@
     if (!modulated) return null; // caller falls back to a non-modulating plan
 
     // ---- final phrase: a stay-phrase that closes the bar ------------------
-    // Same bar-close retry as generatePhrases: build an authentic, isFinal
-    // phrase, and if the total isn't a whole bar, rebuild over nearby budgets
-    // (re-deriving phase from the pre-final total each attempt) until it closes.
-    const baseLen = all.length;
+    // Same as generatePhrases: an authentic, isFinal phrase nudged to cadence on
+    // beat 3, which closes the bar (its closing half note fills beats 3-4).
     const baseTotal = all.reduce((a, c) => a + c.dur, 0);
     const basePhase = baseTotal % BAR;
-    const baseBudget = 7 + Math.floor(rng() * 2);
-    const offsets = [0, 1, -1, 2, -2, 3, 4, 5];
-    let chosen = null;
-    for (const off of offsets) {
-      const beatBudget = baseBudget + off;
-      if (beatBudget < 3) continue; // buildPhrase floors at 3
-      const ph = buildPhrase(rng, {
-        mode: curKey.mode, difficulty, startPhase: basePhase, beatBudget,
-        cadenceClass: 'authentic', chromatic, isFinal: true,
-      });
-      for (const c of ph) c.key = curKey;
-      chosen = ph;
-      if ((baseTotal + ph.reduce((a, c) => a + c.dur, 0)) % BAR === 0) break;
-    }
-
-    all.length = baseLen; // drop any earlier final-phrase attempt
+    const chosen = buildPhraseToBeat3(rng, 7 + Math.floor(rng() * 2), {
+      mode: curKey.mode, difficulty, startPhase: basePhase,
+      cadenceClass: 'authentic', chromatic, isFinal: true,
+    });
+    for (const c of chosen) c.key = curKey;
     for (const c of chosen) all.push(c);
     phraseEnds.push(all.length - 1);
 

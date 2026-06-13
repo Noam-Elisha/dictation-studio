@@ -179,14 +179,17 @@ suite('progression: modulation', () => {
     }
   });
 
-  test('generateModulating: progressive key plan, valid pivots, early/multiple modulation, PAC close', () => {
-    let runs = 0, withTwo = 0, earlyMod = 0;
+  test('generateModulating: pivots in the middle phrases, never first/last/adjacent, valid pivots, PAC close', () => {
+    let runs = 0, withTwo = 0, firstMod = 0, lastMod = 0, adjMod = 0;
+    let twoPhrasePieces = 0, twoPhraseNulls = 0;
     const targetsSeen = new Set();
     for (let seed = 0; seed < 600; seed++) {
       const home = seed % 2 ? C_MAJOR : A_MINOR;
       const rng = DS.rng.create(seed * 5 + 1);
-      const phrases = 2 + (seed % 3);
+      const phrases = 2 + (seed % 5); // 2..6 (the app uses 2..4; 5-6 exercise 2 pivots)
       const chords = P.generateModulating(rng, { difficulty: 4, mode: home.mode, phrases, key1: home });
+      // a two-phrase piece has no middle phrase, so it never modulates -> null
+      if (phrases === 2) { twoPhrasePieces++; if (!chords) twoPhraseNulls++; }
       if (!chords) continue;
       runs++;
       const mod = chords.modulation;
@@ -196,11 +199,16 @@ suite('progression: modulation', () => {
       // the opening chord is always the home tonic
       ok(sameKey(chords[0].key, home), `seed ${seed}: opens at home`);
 
-      // pivots = chords tagged with a key change; at least one
+      // pivots = chords tagged with a key change; map each to its phrase index
       const pivotIdx = chords.map((c, i) => (c.keyChange ? i : -1)).filter((i) => i >= 0);
       ok(pivotIdx.length >= 1, `seed ${seed}: at least one modulation`);
-      if (pivotIdx.length >= 2) withTwo++;
-      if (pivotIdx.some((i) => i <= chords.phraseEnds[0])) earlyMod++;
+      const phraseOf = (ci) => chords.phraseEnds.findIndex((e) => ci <= e);
+      const pivotPhrases = [...new Set(pivotIdx.map(phraseOf))].sort((a, b) => a - b);
+      if (pivotPhrases.length >= 2) withTwo++;
+      if (pivotPhrases.includes(0)) firstMod++;            // never the first phrase
+      if (pivotPhrases.includes(phrases - 1)) lastMod++;   // never the last phrase
+      for (let k = 1; k < pivotPhrases.length; k++)
+        if (pivotPhrases[k] - pivotPhrases[k - 1] < 2) adjMod++; // never two in a row
 
       // key is piecewise constant, changing only at a pivot
       for (let i = 1; i < chords.length; i++) {
@@ -226,12 +234,15 @@ suite('progression: modulation', () => {
       ok(sameKey(last.key, mod.to), `seed ${seed}: final key recorded`);
       ok(['PAC', 'IAC'].includes(chords.cadence), `seed ${seed}: authentic close (${chords.cadence})`);
 
-      // bar-aligned: phrases of two bars each
+      // bar-aligned: whole number of bars
       eq(chords.reduce((s, c) => s + c.dur, 0) % 192, 0, `seed ${seed}: whole bars`);
     }
-    ok(runs >= 580, `most seeds produced a modulating progression (${runs}/600)`);
-    ok(earlyMod > 0, `modulation sometimes happens in the first phrase (${earlyMod})`);
-    ok(withTwo > 0, `two modulations sometimes occur (${withTwo})`);
+    ok(runs >= 440, `most >=3-phrase seeds produced a modulating progression (${runs}/600)`);
+    eq(firstMod, 0, 'no modulation in the first phrase');
+    eq(lastMod, 0, 'no modulation in the last phrase');
+    eq(adjMod, 0, 'no two modulations in a row');
+    ok(withTwo > 0, `two modulations occur in longer pieces (${withTwo})`);
+    eq(twoPhraseNulls, twoPhrasePieces, 'two-phrase pieces never modulate');
     ok(targetsSeen.size >= 4, `a variety of final keys (${targetsSeen.size})`);
   });
 
