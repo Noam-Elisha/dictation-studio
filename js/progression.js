@@ -396,16 +396,29 @@
   // last chord keep the function, with subordinate (inner) chords on weak
   // beats. This applies to EVERY function — predominant and dominant expansion
   // matter as much as tonic. Every sym already exists in CAT[mode].
+  // Prolongation = expanding ONE harmony in time by departing to a subordinate
+  // chord and returning. Every chain is therefore [X, connector, X'] (X' is X or
+  // an inversion of it); a bare quality/inversion shuffle (I->I6, ii->ii6) is NOT
+  // a prolongation. The connector is the dominant of the prolonged chord:
+  //   - the tonic's own dominant V (or a neighbour IV, or a passing V43/vii°6
+  //     between root and first inversion) — DIATONIC, available from D2;
+  //   - a non-tonic chord's APPLIED dominant (ii-V/ii-ii6, V-V/V-V) — chromatic,
+  //     so gated to D3+ in composeBody (where secondary dominants enter).
   const PROLONG = {
     major: {
-      T: [['I', 'viio6', 'I6'], ['I', 'V6', 'I'], ['I', 'V43', 'I6'], ['I6', 'V6', 'I'], ['I', 'IV', 'I'], ['I', 'I6']],
-      PD: [['IV', 'ii6'], ['ii', 'ii6'], ['IV', 'IV6', 'ii6'], ['IV', 'ii65'], ['ii6', 'ii65'], ['IV', 'ii']],
-      D: [['V', 'V7'], ['V6', 'V65']],
+      // tonic: dominant/subdominant neighbours, and bass-passing 1-2-3 / 3-2-1
+      T: [['I', 'V', 'I'], ['I', 'V6', 'I'], ['I', 'V7', 'I'], ['I', 'IV', 'I'],
+          ['I', 'V43', 'I6'], ['I', 'viio6', 'I6'], ['I6', 'V43', 'I']],
+      // predominant tonicised by its applied dominant
+      PD: [['ii', 'V/ii', 'ii6'], ['ii', 'V7/ii', 'ii6'], ['IV', 'V7/IV', 'IV6']],
+      // dominant tonicised by its applied dominant (V of V)
+      D: [['V', 'V/V', 'V'], ['V', 'V7/V', 'V']],
     },
     minor: {
-      T: [['i', 'viio6', 'i6'], ['i', 'V6', 'i'], ['i', 'iv', 'i'], ['i', 'i6']],
-      PD: [['iv', 'iio6'], ['iv', 'iv6', 'iio6'], ['iv', 'iiø65']],
-      D: [['V', 'V7']],
+      T: [['i', 'V', 'i'], ['i', 'V6', 'i'], ['i', 'V7', 'i'], ['i', 'iv', 'i'],
+          ['i', 'V43', 'i6'], ['i', 'viio6', 'i6'], ['i6', 'V43', 'i']],
+      PD: [['iv', 'V7/iv', 'iv6'], ['iv', 'V/iv', 'iv6']],
+      D: [['V', 'V/V', 'V'], ['V', 'V7/V', 'V']],
     },
   };
 
@@ -459,8 +472,11 @@
         const fn = CAT[mode][cur].fn;
         const fnBoost = fn === 'PD' ? 1.9 : fn === 'D' ? 1.4 : 1.0;
         if (!RESOLUTION[cur] && rng() < pProlong * fnBoost) {
+          // applied-dominant (chromatic) chains only once secondaries are in play
+          const allowApplied = difficulty >= 3;
           const pool = (PROLONG[mode][fn] || []).filter(
-            (chain) => chain[0] === cur && chain.length - 1 <= remaining && chain.length >= 2
+            (chain) => chain[0] === cur && chain.length - 1 <= remaining && chain.length >= 2 &&
+              (allowApplied || !chain.some((s) => s.includes('/')))
           );
           if (pool.length) {
             const chain = DS.rng.weighted(rng, pool.map((c) => [c, c.length - 1]));

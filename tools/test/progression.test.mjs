@@ -293,9 +293,17 @@ suite('progression: colour vocabulary', () => {
 });
 
 suite('progression: prolongation', () => {
-  test('expansion templates voice cleanly and emphasise non-tonic (PD) expansion', () => {
+  test('expansion templates depart-and-return, voice cleanly, and emphasise non-tonic (PD/D)', () => {
     const PROLONG = P._PROLONG;
-    ok(PROLONG.major.PD.length >= 4 && PROLONG.major.D.length >= 1, 'PD emphasised, D present');
+    // the core of a prolongation: leave the prolonged chord for a connector and
+    // return — never a bare inversion/quality shuffle. So >= 3 chords, and the
+    // second chord (the connector) differs from the chord being prolonged.
+    for (const mode of ['major', 'minor']) for (const fn of ['T', 'PD', 'D'])
+      for (const chain of PROLONG[mode][fn]) {
+        ok(chain.length >= 3, `${mode}/${fn} [${chain.join(' ')}] departs and returns (>= 3 chords)`);
+        ok(chain[1] !== chain[0], `${mode}/${fn} [${chain.join(' ')}] has a real connector`);
+      }
+    ok(PROLONG.major.PD.length >= 3 && PROLONG.major.D.length >= 1, 'PD emphasised, D present');
     ok(PROLONG.minor.PD.length >= 2, 'minor PD present');
     for (const mode of ['major', 'minor']) {
       const key = mode === 'major' ? C_MAJOR : A_MINOR;
@@ -313,14 +321,14 @@ suite('progression: prolongation', () => {
 
   test('prolongation fills D2+ bodies (not D1), incl. non-tonic, and the count stays budget-bound', () => {
     const PROLONG = P._PROLONG;
-    // A few PROLONG chains are ALSO ordinary single walk-steps (the transition
-    // table has I->I6, I->IV->I, V->V7 as plain edges), so the D1 block-chord
-    // walk emits them incidentally — they are not evidence of an *inserted*
-    // prolongation. Every other chain uses an internal transition the walk
-    // table lacks (e.g. IV->ii6, I->V6->I, I->vii°6->I6), so its appearance as
-    // a contiguous subsequence is an unambiguous prolongation signal. Scan only
-    // those (measured: D1 emits the excluded chains, never the rest).
-    const WALK_REPRO = new Set(['I I6', 'i i6', 'I IV I', 'i iv i', 'V V7']);
+    // Some PROLONG chains are also reachable as ordinary walk paths — I-V-I,
+    // I-V7-I and I-IV-I just chain two plain edges — so the D1 block-chord walk
+    // emits them incidentally; they are not evidence of an *inserted*
+    // prolongation. Every other chain needs a chord the D1 walk lacks (V6, V43,
+    // vii°6, or an applied dominant), so its appearance as a contiguous
+    // subsequence is an unambiguous prolongation signal. Scan only those
+    // (measured: D1 emits the excluded chains, never the rest).
+    const WALK_REPRO = new Set(['I V I', 'I V7 I', 'I IV I', 'i V i', 'i V7 i', 'i iv i']);
     const sig = (chains) => chains.filter((ch) => !WALK_REPRO.has(ch.join(' ')));
     const chainsFor = (mode) => sig([].concat(PROLONG[mode].T, PROLONG[mode].PD, PROLONG[mode].D));
     const hasChain = (syms, mode) => chainsFor(mode).some((ch) => {
