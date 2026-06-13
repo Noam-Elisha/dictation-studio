@@ -55,6 +55,11 @@
 
 * { box-sizing: border-box; }
 
+/* The `hidden` attribute must beat element display rules (.check is display:flex,
+   .field-inline is display:grid), or conditionally-hidden controls — e.g. the
+   Bach-only random-transpose toggle in Generated mode — leak through. */
+[hidden] { display: none !important; }
+
 html { scroll-behavior: smooth; }
 
 body {
