@@ -147,12 +147,14 @@ suite('nct: embellishment', () => {
     function density(difficulty) {
       let sum = 0, runs = 0;
       for (let seed = 0; seed < 250; seed++) {
+        const mode = seed % 2 ? 'major' : 'minor';
+        const key = mode === 'major' ? C_MAJOR : A_MINOR;
         const rng = DS.rng.create(seed * 9 + difficulty * 13);
-        const chords = DS.progression.generate(rng, { difficulty, mode: seed % 2 ? 'major' : 'minor', bars: 3 });
-        const key = seed % 2 ? C_MAJOR : A_MINOR;
+        // the shipped path (cadential anticipations need the phrase-end set)
+        const chords = DS.progression.generatePhrases(rng, { difficulty: Math.min(4, difficulty), mode, phrases: 2 + (seed % 3), chromatic: difficulty >= 5 });
         const block = DS.voicing.harmonize(rng, key, chords);
         if (!block) continue;
-        const voices = DS.nct.assemble(rng, key, chords, block, { difficulty });
+        const voices = DS.nct.assemble(rng, key, chords, block, { difficulty, skipChords: new Set(chords.phraseEnds) });
         sum += voiceSubdivPerBeat(voices, chords.reduce((s, c) => s + c.dur, 0));
         runs++;
       }
@@ -165,38 +167,98 @@ suite('nct: embellishment', () => {
     ok(d[4] > d[3] * 1.1, `d5 denser than d4 (${d[4].toFixed(2)} vs ${d[3].toFixed(2)})`);
   });
 
-  test('anticipations are present and far outnumber escapes', () => {
-    const pc = (m) => ((m % 12) + 12) % 12;
-    let anticipations = 0, escapes = 0;
+  test('anticipations are cadential only and one at a time (shipped path)', () => {
+    let anticipations = 0, offCadence = 0, doubled = 0;
     for (let seed = 0; seed < 600; seed++) {
-      const key = seed % 2 ? C_MAJOR : A_MINOR;
+      const mode = seed % 2 ? 'major' : 'minor';
+      const key = mode === 'major' ? C_MAJOR : A_MINOR;
       const rng = DS.rng.create(seed * 9 + 4);
-      const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+      const chords = DS.progression.generatePhrases(rng, { difficulty: 4, mode, phrases: 2 + (seed % 3) });
       const block = DS.voicing.harmonize(rng, key, chords);
       if (!block) continue;
-      const starts = [], durs = chords.map((c) => c.dur);
-      let a = 0;
-      for (const c of chords) { starts.push(a); a += c.dur; }
-      const ac = (t) => { for (let i = 0; i < starts.length; i++) if (t >= starts[i] && t < starts[i] + durs[i]) return i; return starts.length - 1; };
-      const cps = block.map((ch) => new Set(ch.map((p) => pc(T.midi(p)))));
-      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 4 });
-      for (let v = 0; v < 4; v++) {
-        const ns = voices[v];
-        let t = 0;
-        for (let i = 0; i < ns.length; i++) {
-          const n = ns[i];
-          if (n.dur <= 24 && !cps[ac(t)].has(pc(T.midi(n)))) {
-            const prev = ns[i - 1], next = ns[i + 1];
-            const cm = T.midi(n), pm = prev && T.midi(prev), nm = next && T.midi(next);
-            if (next && nm === cm) anticipations++; // sounded early, left by repetition
-            else if (prev && Math.abs(cm - pm) <= 2 && next && Math.abs(nm - cm) > 2) escapes++;
+      const phraseEnds = new Set(chords.phraseEnds);
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 4, skipChords: phraseEnds });
+      const starts = []; let acc = 0;
+      for (const c of chords) { starts.push(acc); acc += c.dur; }
+      // an anticipation = an off-beat figure at the END of chord i whose pitch is
+      // the NEXT chord's tone (sounded early, left by repetition)
+      for (let i = 0; i < chords.length - 1; i++) {
+        let here = 0;
+        for (let v = 0; v < 4; v++) {
+          const seg = [];
+          let t = 0;
+          for (const nt of voices[v]) { if (t >= starts[i] && t < starts[i] + chords[i].dur) seg.push(nt); t += nt.dur; }
+          if (seg.length < 2) continue;
+          const last = seg[seg.length - 1];
+          if (last.step < 0) continue;
+          if (T.midi(last) === T.midi(block[i + 1][v]) && T.midi(last) !== T.midi(block[i][v])) {
+            anticipations++; here++;
+            if (!phraseEnds.has(i + 1)) offCadence++; // must lead into a phrase end
           }
-          t += n.dur;
         }
+        if (here > 1) doubled++; // never two at the same cadence
       }
     }
-    ok(anticipations > 200, `expected many anticipations, saw ${anticipations}`);
-    ok(anticipations > escapes * 3, `anticipations (${anticipations}) should dwarf escapes (${escapes})`);
+    ok(anticipations > 100, `expected cadential anticipations, saw ${anticipations}`);
+    eq(offCadence, 0, `every anticipation leads into a phrase-end chord (off-cadence: ${offCadence})`);
+    eq(doubled, 0, `at most one anticipation per cadence (doubled: ${doubled})`);
+  });
+
+  test('non-chord tones stay diatonic and break no rules on the shipped path', () => {
+    const pc = (m) => ((m % 12) + 12) % 12;
+    let ncts = 0, chromatic = 0, parallels = 0, consecDiss = 0, cross = 0;
+    for (let d = 2; d <= 5; d++) for (let seed = 0; seed < 180; seed++) {
+      const mode = seed % 2 ? 'major' : 'minor';
+      const key = mode === 'major' ? C_MAJOR : A_MINOR;
+      const rng = DS.rng.create(seed * 13 + d * 17);
+      const phrases = 2 + (seed % 3), harmDiff = Math.min(4, d), chrom = d >= 5;
+      let chords = harmDiff >= 4 ? DS.progression.generateModulating(rng, { difficulty: harmDiff, mode, phrases, key1: key, chromatic: chrom }) : null;
+      if (!chords) chords = DS.progression.generatePhrases(rng, { difficulty: harmDiff, mode, phrases, chromatic: chrom });
+      const k0 = chords[0].key || key;
+      const block = DS.voicing.harmonize(rng, k0, chords);
+      if (!block) continue;
+      const voices = DS.nct.assemble(rng, k0, chords, block, { difficulty: d, skipChords: new Set(chords.phraseEnds) });
+      const starts = [], durs = chords.map((c) => c.dur); let acc = 0;
+      for (const c of chords) { starts.push(acc); acc += c.dur; }
+      const ac = (t) => { for (let i = 0; i < starts.length; i++) if (t >= starts[i] && t < starts[i] + durs[i]) return i; return chords.length - 1; };
+      const cps = block.map((ch) => new Set(ch.map((p) => pc(T.midi(p)))));
+      const g = gridOf(voices);
+      const ticks = new Set([0]);
+      for (const s of g) for (const e of s.notes) if (e.t < g[0].total) ticks.add(e.t);
+      const entry = (vi, t) => { let cur = g[vi].notes[0]; for (const e of g[vi].notes) { if (e.t <= t) cur = e; else break; } return cur.n; };
+      let prev = null, prevDiss = false;
+      for (const t of [...ticks].sort((a, b) => a - b)) {
+        const ns = [0, 1, 2, 3].map((vi) => entry(vi, t));
+        const m = ns.map((nt) => (nt.step < 0 ? null : T.midi(nt)));
+        const cp = cps[ac(t)], ciKey = chords[ac(t)].key || k0, scale = T.scale(ciKey);
+        let diss = false;
+        for (let a = 0; a < 4; a++) {
+          if (m[a] != null && !cp.has(pc(m[a]))) {
+            ncts++;
+            const sc = scale.find((x) => x.step === ns[a].step);
+            if (sc && sc.alter !== ns[a].alter) chromatic++;
+          }
+          for (let b = a + 1; b < 4; b++) {
+            if (m[a] == null || m[b] == null) continue;
+            if (ns[a].step === ns[b].step && ns[a].alter !== ns[b].alter) cross++;
+            const dd = Math.abs(m[a] - m[b]);
+            if ((dd === 1 || dd === 2) && (!cp.has(pc(m[a])) || !cp.has(pc(m[b])))) diss = true;
+            if (prev && prev[a] != null && prev[b] != null) {
+              const bef = ic(Math.max(prev[a], prev[b]), Math.min(prev[a], prev[b]));
+              const aft = ic(Math.max(m[a], m[b]), Math.min(m[a], m[b]));
+              if (prev[a] !== m[a] && prev[b] !== m[b] && isPerf(aft) && bef === aft) parallels++;
+            }
+          }
+        }
+        if (diss && prevDiss) consecDiss++;
+        prev = m; prevDiss = diss;
+      }
+    }
+    ok(ncts > 500, `plenty of non-chord tones exercised (${ncts})`);
+    eq(chromatic, 0, `every non-chord tone is diatonic to its key (${chromatic})`);
+    eq(parallels, 0, `NCTs introduce no parallel perfects (${parallels})`);
+    eq(consecDiss, 0, `no two dissonant sonorities in a row (${consecDiss})`);
+    eq(cross, 0, `no cross relations (${cross})`);
   });
 
   test('bass is embellished sometimes (passing tones in the bass)', () => {
@@ -315,14 +377,14 @@ suite('nct: embellishment', () => {
     for (let seed = 0; seed < 300; seed++) {
       const key = seed % 2 ? C_MAJOR : A_MINOR;
       const rng = DS.rng.create(seed * 7 + 9);
-      const chords = DS.progression.generate(rng, { difficulty: 4, mode: key.mode, bars: 3 });
+      const chords = DS.progression.generatePhrases(rng, { difficulty: 4, mode: key.mode, phrases: 2 + (seed % 3), chromatic: true });
       const block = DS.voicing.harmonize(rng, key, chords);
       if (!block) continue;
       const cps = block.map((c) => new Set(c.map((p) => pc(T.midi(p)))));
       const starts = []; let acc = 0;
       for (const c of chords) { starts.push(acc); acc += c.dur; }
       const ac = (t) => { for (let i = 0; i < starts.length; i++) if (t >= starts[i] && t < starts[i] + chords[i].dur) return i; return chords.length - 1; };
-      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 5 });
+      const voices = DS.nct.assemble(rng, key, chords, block, { difficulty: 5, skipChords: new Set(chords.phraseEnds) });
       for (const v of voices) {
         let t = 0;
         for (let i = 0; i < v.length; i++) {

@@ -61,15 +61,13 @@
     const alter = (sc.find((x) => x.step === step) || { alter: 0 }).alter;
     return { step, alter, oct };
   }
-  // adjacent lower letter, a half step below (chromatic lower neighbor: G->F#)
-  function chromaticHalf(p, dir) {
-    const absStep = p.oct * 7 + p.step + dir;
-    const step = ((absStep % 7) + 7) % 7;
-    const oct = Math.floor(absStep / 7);
-    const natMidi = 12 * (oct + 1) + STEP_PC[step];
-    return { step, alter: T.midi(p) + dir - natMidi, oct };
+  // Is `pitch` a member of `key`'s scale? Every non-chord tone must be diatonic
+  // (no chromatic neighbours, and no chromatic note held over from a coloured
+  // chord as a suspension) — the chromatic chords themselves are unaffected.
+  function diatonicTo(key, pitch) {
+    const sc = T.scale(key).find((x) => x.step === (((pitch.step % 7) + 7) % 7));
+    return sc ? sc.alter === pitch.alter : false;
   }
-
   const note = (p, dur, extra) => ({
     step: p.step, alter: p.alter, oct: p.oct, dur,
     tieStart: false, tieEnd: false, fermata: false, ...extra,
@@ -87,9 +85,9 @@
       // passing tone filling a third with the diatonic note between
       out.push({ type: 'passing', pitch: diatonicStep(key, p1, Math.sign(iv.d)) });
     } else if (iv.d === 0 && iv.s === 0) {
+      // neighbours are DIATONIC only (the scale step above / below)
       out.push({ type: 'upper neighbor', pitch: diatonicStep(key, p1, 1) });
       out.push({ type: 'lower neighbor', pitch: diatonicStep(key, p1, -1) });
-      if (adv) out.push({ type: 'chromatic neighbor', pitch: chromaticHalf(p1, -1) });
     } else if (Math.abs(iv.d) === 1 && Math.abs(iv.s) <= 2 && adv) {
       // a plain step: prefer an anticipation — sound the next chord tone early
       // (approached by step, left by repetition); the échappée stays as a rare
@@ -97,7 +95,7 @@
       out.push({ type: 'anticipation', pitch: { step: p2.step, alter: p2.alter, oct: p2.oct } });
       out.push({ type: 'escape', pitch: diatonicStep(key, p1, -Math.sign(iv.d)) });
     }
-    return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
+    return out.filter((c) => diatonicTo(key, c.pitch));
   }
 
   // On-beat (accented) figure occupying the START of chord i+1 (the first
@@ -116,7 +114,7 @@
     if (difficulty >= 3 && Math.abs(iv.d) === 2 && (Math.abs(iv.s) === 3 || Math.abs(iv.s) === 4)) {
       out.push({ type: 'accented passing', pitch: diatonicStep(key, p1, Math.sign(iv.d)), tie: false });
     }
-    return out.filter((c) => c.pitch.alter >= -2 && c.pitch.alter <= 2);
+    return out.filter((c) => diatonicTo(key, c.pitch));
   }
 
   // ---- texture grid + validation --------------------------------------------
@@ -268,6 +266,7 @@
     const passes = difficulty >= 5 ? 2 : 1;
     const decayBase = difficulty >= 5 ? 0.7 : 0.62;
     const neighborChords = new Set();
+    const anticipated = new Set(); // chord indices that already carry an anticipation
 
     for (let pass = 0; pass < passes; pass++)
     for (let i = 0; i < n - 1; i++) {
@@ -327,15 +326,19 @@
             // (which make a voice bounce between two notes) stay very rare
             if (rng() < (difficulty >= 5 ? 0.95 : 0.35)) continue;
           }
-          // step motions: usually leave plain (anticipations are idiomatically
-          // sparse, mostly cadential); when embellished, strongly prefer an
-          // anticipation over the (leapy) échappée. Difficulty 5 skips most of
-          // them — it expresses stepwise motion through suspensions instead.
+          // step motions: an anticipation is CADENTIAL ONLY (into a phrase-end
+          // chord) and ONE AT A TIME (no other voice already anticipating this
+          // cadence). Off-cadence steps stay plain, with a rare échappée.
           if (cands.every((c) => c.type === 'anticipation' || c.type === 'escape')) {
-            if (rng() < (difficulty >= 5 ? 0.8 : 0.5)) continue;
-            const ant = cands.filter((c) => c.type === 'anticipation');
-            const esc = cands.filter((c) => c.type === 'escape');
-            cands = ant.length && rng() < 0.85 ? ant : esc.length ? esc : cands;
+            const ant = (skip.has(i + 1) && !anticipated.has(i))
+              ? cands.filter((c) => c.type === 'anticipation') : [];
+            if (ant.length) {
+              cands = ant; // take the cadential anticipation
+            } else {
+              const esc = cands.filter((c) => c.type === 'escape');
+              if (!esc.length || rng() < 0.85) continue; // échappée stays rare
+              cands = esc;
+            }
           }
           chosen = DS.rng.pick(rng, cands);
           kind = 'off';
@@ -360,6 +363,7 @@
           if (windowValid(buildAll(block, chords, off, on), lo, hi, diss)) {
             placed++;
             if (/neighbor/.test(chosen.type)) neighborChords.add(i);
+            if (chosen.type === 'anticipation') anticipated.add(i);
           } else off[v].delete(i);
         }
       }
